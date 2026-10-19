@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -220,15 +219,6 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       <p className="mt-2 text-center text-[10px] text-muted-foreground/80">
         Protected by session authentication, CSRF validation, and login rate limiting.
       </p>
-
-      <div className="mt-4 text-center">
-        <Link
-          href="/"
-          className="text-[11px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          Return to workspace entry
-        </Link>
-      </div>
     </div>
   );
 }

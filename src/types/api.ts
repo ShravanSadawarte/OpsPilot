@@ -5,6 +5,7 @@ export interface DashboardMetrics {
   unassignedWork: number;
   myWork: number;
   pendingApprovals: number;
+  teamCount: number;
   recentActivity: Array<{
     id: string;
     type: string;

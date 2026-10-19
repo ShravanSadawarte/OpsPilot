@@ -18,6 +18,7 @@ export async function dashboardMetrics(user: AuthedUser) {
       unassignedWork: 0,
       myWork: 0,
       pendingApprovals: 0,
+      teamCount: 0,
       recentActivity: [],
       statusSummary: [],
       prioritySummary: [],
@@ -63,8 +64,8 @@ export async function dashboardMetrics(user: AuthedUser) {
         status: { notIn: [WorkItemStatus.RESOLVED, WorkItemStatus.CLOSED] },
       },
     }),
-    db.workItem.count({ where: { ...baseWhere, assigneeId: null } }),
-    db.workItem.count({ where: { ...baseWhere, assigneeId: user.id } }),
+    db.workItem.count({ where: { ...baseWhere, assigneeId: null, status: { notIn: [WorkItemStatus.RESOLVED, WorkItemStatus.CLOSED] } } }),
+    db.workItem.count({ where: { ...baseWhere, assigneeId: user.id, status: { notIn: [WorkItemStatus.RESOLVED, WorkItemStatus.CLOSED] } } }),
     db.approval.count({
       where: { status: "PENDING", workItem: { teamId: { in: teamIds } } },
     }),
@@ -100,7 +101,7 @@ export async function dashboardMetrics(user: AuthedUser) {
         { priority: Priority.CRITICAL },
       ],
     },
-    orderBy: [{ priority: "asc" }, { dueDate: "asc" }],
+    orderBy: [{ priority: "desc" }, { dueDate: "asc" }],
     take: 10,
     select: {
       id: true,
@@ -120,6 +121,7 @@ export async function dashboardMetrics(user: AuthedUser) {
     unassignedWork,
     myWork,
     pendingApprovals,
+    teamCount: teamIds.length,
     recentActivity: recentActivity.map((e) => ({
       id: e.id,
       type: e.type,
