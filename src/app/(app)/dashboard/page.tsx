@@ -32,6 +32,7 @@ import {
   formatNumber,
   formatPercent,
   formatRelativeTime,
+  isOverdueStatus,
   pluralize,
 } from "@/lib/format";
 import {
@@ -225,11 +226,7 @@ export default async function DashboardPage() {
             {data.attentionRequired.length ? (
               <div className="divide-y divide-border/70">
                 {data.attentionRequired.map((item) => {
-                  const overdue =
-                    Boolean(item.dueDate) &&
-                    new Date(item.dueDate as string).getTime() < Date.now() &&
-                    item.status !== "RESOLVED" &&
-                    item.status !== "CLOSED";
+                  const overdue = isOverdueStatus(item.dueDate, item.status);
 
                   return (
                     <Link

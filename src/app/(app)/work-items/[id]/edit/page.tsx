@@ -1,172 +1,103 @@
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { validateForm } from "@/components/ui/form";
-import { useToast } from "@/components/ui/toast";
-import { apiFetch } from "@/lib/api-client";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { LockKeyhole } from "lucide-react";
+import { requireUser } from "@/lib/auth";
+import { AppError } from "@/lib/http";
+import { canEditWorkItem } from "@/lib/permissions";
+import { getWorkItem } from "@/server/services/workItem.service";
+import { getTeam } from "@/server/services/team.service";
 import type { WorkItem } from "@/types/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import {
+  EditWorkItemForm,
+  type EditMember,
+} from "@/components/work-items/edit-work-item-form";
 
-const schema = z.object({
-  title: z.string().min(1, "Title is required").max(200),
-  description: z.string().optional(),
-  type: z.enum(["INCIDENT", "CUSTOMER_ISSUE", "ENGINEERING_TASK", "PAYMENT_INVESTIGATION", "COMPLIANCE_REQUEST", "OPERATIONAL_TASK"]),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
-  status: z.enum(["OPEN", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "RESOLVED", "CLOSED"]),
-  assigneeId: z.string().uuid().optional().nullable(),
-  dueDate: z.string().optional().nullable(),
-  version: z.number().int(),
-});
+export const metadata: Metadata = {
+  title: "Edit work item",
+};
 
-export default function EditWorkItemPage({ params }: { params: { id: string } }) {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [conflict, setConflict] = useState<string | null>(null);
-  const [serverVersion, setServerVersion] = useState<number | null>(null);
+export const dynamic = "force-dynamic";
 
-  const form = useForm<z.infer<typeof schema>>({
-    defaultValues: { title: "", description: "", type: "OPERATIONAL_TASK", priority: "MEDIUM", status: "OPEN", assigneeId: undefined, dueDate: undefined, version: 1 },
-  });
+export default async function EditWorkItemPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const user = await requireUser();
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/v1/work-items?workItemId=${params.id}`);
-    if (!res.ok) { router.push("/work-items"); return; }
-    const json = await res.json();
-    const item = json.data as WorkItem;
-    setServerVersion(item.version);
-    form.reset({
-      title: item.title,
-      description: item.description ?? "",
-      type: item.type as z.infer<typeof schema>["type"],
-      priority: item.priority as z.infer<typeof schema>["priority"],
-      status: item.status as z.infer<typeof schema>["status"],
-      assigneeId: item.assignee?.id ?? undefined,
-      dueDate: item.dueDate ? new Date(item.dueDate).toISOString().slice(0, 16) : undefined,
-      version: item.version,
-    });
-  }, [params.id, form, router]);
-
-  useEffect(() => {
-    (async () => {
-      await load();
-    })();
-  }, [load]);
-
-  async function onSubmit(values: z.infer<typeof schema>) {
-    setLoading(true);
-    setConflict(null);
-    try {
-      const validated = validateForm(schema, values);
-      const res = await apiFetch(`/api/v1/work-items?workItemId=${params.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(validated),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        if (res.status === 409) {
-          setConflict((json as { error?: { message?: string } }).error?.message ?? "This work item was updated by another user. Your edits are preserved—refresh and reapply.");
-          toast({ variant: "destructive", title: "Conflict", description: (json as { error?: { message?: string } }).error?.message ?? "Version conflict" });
-        } else {
-          toast({ variant: "destructive", title: "Error", description: (json as { error?: { message?: string } }).error?.message ?? "Update failed" });
-        }
-        return;
-      }
-      router.push(`/work-items/${params.id}`);
-    } catch (e: unknown) {
-      toast({ variant: "destructive", title: "Error", description: (e as Error)?.message ?? "Update failed" });
-    } finally {
-      setLoading(false);
-    }
+  let item: WorkItem;
+  try {
+    const result = await getWorkItem(user, id);
+    item = (await result.json()).data as WorkItem;
+  } catch (error) {
+    if (error instanceof AppError && error.status === 404) notFound();
+    throw error;
   }
 
-  function refreshAndReapply() {
-    window.location.reload();
+  const canEdit = await canEditWorkItem(user, item);
+  if (!canEdit) {
+    return (
+      <div className="mx-auto max-w-xl py-8">
+        <Card>
+          <CardHeader>
+            <span className="mb-1 grid size-10 place-items-center rounded-xl border border-border bg-muted text-muted-foreground">
+              <LockKeyhole className="size-5" aria-hidden="true" />
+            </span>
+            <CardTitle>You can view this item, but not edit it</CardTitle>
+            <CardDescription>
+              Editing is limited to the reporter, the assignee, team leads, managers, and
+              administrators. You can still comment, claim unassigned work, and follow the activity.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href={`/work-items/${item.id}`}>Back to work item</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/work-items">Open work queue</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
-  if (!serverVersion) return null;
+  const teamResult = await getTeam(user, item.teamId);
+  const teamBody = (await teamResult.json()) as {
+    data?: { team?: { memberships?: EditMember[] } };
+  };
+  const members = teamBody.data?.team?.memberships ?? [];
 
   return (
-    <Card className="w-full max-w-2xl">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button asChild onClick={() => router.push(`/work-items/${params.id}`)} variant="outline" size="sm">
-            <ArrowLeft className="size-4" /> Back
-          </Button>
-        </div>
-        <CardTitle>Edit work item</CardTitle>
-      </CardHeader>
-      {conflict && (
-        <div className="p-3 mb-4 rounded-md border border-destructive/50 bg-destructive/50 text-xs text-destructive">
-          {conflict}&nbsp;
-          <button onClick={refreshAndReapply} className="ml-2 underline">Refresh</button>
-          <span className="ml-2 text-normal">— your edits are preserved below.</span>
-        </div>
-      )}
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input {...form.register("title")} disabled={loading} />
-              {form.formState.errors.title && <span className="text-xs text-destructive">{form.formState.errors.title.message}</span>}
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
-              <Select {...form.register("status")} disabled={loading}>
-                <option value="OPEN">Open</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="BLOCKED">Blocked</option>
-                <option value="IN_REVIEW">In Review</option>
-                <option value="RESOLVED">Resolved</option>
-                <option value="CLOSED">Closed</option>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Description</label>
-            <Textarea {...form.register("description")} placeholder="…" disabled={loading} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Priority</label>
-              <Select {...form.register("priority")} disabled={loading}>
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="CRITICAL">Critical</option>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Assignee</label>
-              <Select {...form.register("assigneeId")} disabled={loading}>
-                <option value="">Unassigned</option>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Due date</label>
-              <Input {...form.register("dueDate")} type="datetime-local" disabled={loading} />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Version: {form.getValues("version")}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={refreshAndReapply} disabled={loading}>
-              <RefreshCw className="size-3 mr-1" /> Refresh
-            </Button>
-          </div>
-          <Button type="submit" disabled={loading} className="w-auto">
-            {loading ? "Saving…" : "Save changes"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <PageHeader
+        backHref={`/work-items/${item.id}`}
+        backLabel={`Back to ${item.publicKey}`}
+        eyebrow={<span className="font-mono text-[11px]">Editing {item.publicKey}</span>}
+        title="Edit work item"
+        description="Update the details your team relies on. Status changes stay in the workflow actions so every move is validated."
+      />
+      <EditWorkItemForm
+        item={{
+          id: item.id,
+          publicKey: item.publicKey,
+          title: item.title,
+          description: item.description,
+          type: item.type,
+          priority: item.priority,
+          assigneeId: item.assigneeId,
+          assignee: item.assignee,
+          dueDate: item.dueDate,
+          version: item.version,
+          team: item.team,
+        }}
+        members={members}
+      />
+    </div>
   );
 }

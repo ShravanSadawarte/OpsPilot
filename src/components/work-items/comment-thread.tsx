@@ -1,91 +1,181 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/components/ui/toast";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Loader2, MessageSquare, Send } from "lucide-react";
+import type { Comment } from "@/types/api";
 import { apiFetch } from "@/lib/api-client";
-import { MessageCircle, Clock, User } from "lucide-react";
+import { readApiError } from "@/lib/api-errors";
+import { formatDateTime, formatRelativeTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { useToast } from "@/components/ui/toast";
 
-export function CommentThread({ workItemId }: { workItemId: string }) {
-  const [comments, setComments] = useState<any[]>([]);
-  const [body, setBody] = useState("");
-  const [loading, setLoading] = useState(false);
+function chronological(comments: Comment[]) {
+  return [...comments].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+}
+
+export function CommentThread({
+  workItemId,
+  initialComments,
+  total,
+}: {
+  workItemId: string;
+  initialComments: Comment[];
+  total: number;
+}) {
+  const router = useRouter();
   const { toast } = useToast();
+  const [comments, setComments] = useState<Comment[]>(() => chronological(initialComments));
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/v1/work-items/${workItemId}/comments?workItemId=${workItemId}`);
-    if (res.ok) {
-      const json = await res.json();
-      setComments(json.data?.items ?? []);
-    }
-  }, [workItemId]);
+  useEffect(() => {
+    setComments(chronological(initialComments));
+  }, [initialComments]);
 
-  useEffect(() => { load(); }, [load]);
+  async function submitComment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = body.trim();
+    if (!value || submitting) return;
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!body.trim()) return;
-    setLoading(true);
+    setSubmitting(true);
+    setError(null);
     try {
-      const res = await apiFetch(`/api/v1/work-items/${workItemId}/comments?workItemId=${workItemId}`, {
-        method: "POST",
-        body: JSON.stringify({ body }),
-      });
-      if (!res.ok) {
-        const json = await res.json();
-        toast({ variant: "destructive", title: "Error", description: json.error?.message });
+      const response = await apiFetch(
+        `/api/v1/work-items/${workItemId}/comments?workItemId=${encodeURIComponent(workItemId)}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ body: value }),
+        },
+      );
+
+      if (!response.ok) {
+        const parsed = await readApiError(response, "Unable to post your comment.");
+        setError(parsed.message);
+        toast({
+          variant: "destructive",
+          title: "Comment not posted",
+          description: parsed.message,
+        });
         return;
       }
+
+      const payload = (await response.json()) as { data?: Comment };
+      if (payload.data) {
+        setComments((current) => chronological([...current, payload.data as Comment]));
+      }
       setBody("");
-      load();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e?.message });
+      toast({ variant: "success", title: "Comment posted" });
+      router.refresh();
+    } catch {
+      setError("We couldn’t reach the server. Your comment is still here and can be retried.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><MessageCircle className="size-4" /> Comments</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-3">
-          {comments.length ? (
-            comments.map((c) => (
-              <div key={c.id} className="flex gap-3 pt-3 border-t border-border">
-                <div className="shrink-0">
-                  <User className="size-4 text-muted-foreground" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground">{c.author?.name ?? "Unknown"} · {new Date(c.createdAt).toLocaleString()}</p>
-                  <p className="text-sm">{c.body}</p>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">No comments yet.</p>
-          )}
-        </div>
+  const remaining = 5000 - body.length;
 
-        <form onSubmit={submit} className="border-t border-border pt-4 space-y-2">
-          <Textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Add a comment…"
-            className="h-24 resize-none"
-            disabled={loading}
-          />
-          <Button type="submit" disabled={loading || !body.trim()} className="w-auto">
-            Add comment
+  return (
+    <div className="space-y-5">
+      {comments.length ? (
+        <ul className="divide-y divide-border/70">
+          {comments.map((comment) => (
+            <li key={comment.id} className="flex gap-3 py-4 first:pt-0 last:pb-0">
+              <UserAvatar
+                name={comment.author.name}
+                email={comment.author.email}
+                size="md"
+                className="mt-0.5"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <p className="text-[13px] font-semibold text-foreground">
+                    {comment.author.name ?? comment.author.email}
+                  </p>
+                  <time
+                    dateTime={comment.createdAt}
+                    title={formatDateTime(comment.createdAt)}
+                    className="text-[11px] text-muted-foreground"
+                    suppressHydrationWarning
+                  >
+                    {formatRelativeTime(comment.createdAt)}
+                  </time>
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-6 text-muted-foreground">
+                  {comment.body}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={MessageSquare}
+          title="No comments yet"
+          description="Start the conversation with the context your teammates will need."
+          compact
+        />
+      )}
+
+      <form onSubmit={submitComment} className="space-y-3 border-t border-border/70 pt-5">
+        <label htmlFor="comment-body" className="text-[13px] font-medium text-foreground">
+          Add a comment
+        </label>
+        {error ? (
+          <div
+            role="alert"
+            className="flex gap-2.5 rounded-lg border border-destructive/25 bg-destructive/[0.06] p-2.5 text-xs text-destructive"
+          >
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <p className="leading-relaxed">{error}</p>
+          </div>
+        ) : null}
+        <Textarea
+          id="comment-body"
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          placeholder="Share an update, blocker, decision, or next step…"
+          className="min-h-24"
+          maxLength={5000}
+          disabled={submitting}
+          aria-invalid={Boolean(error)}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            Visible to active team members · recorded in activity
+            {remaining < 500 ? (
+              <span className={cn("ml-2 tabular-nums", remaining < 100 && "font-medium text-destructive")}>
+                {remaining} characters left
+              </span>
+            ) : null}
+          </p>
+          <Button type="submit" size="sm" disabled={submitting || !body.trim()}>
+            {submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                Posting…
+              </>
+            ) : (
+              <>
+                <Send className="size-4" aria-hidden="true" />
+                Post comment
+              </>
+            )}
           </Button>
-          {loading && <span className="text-xs text-muted-foreground">Posting…</span>}
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+      </form>
+
+      <p className="sr-only" aria-live="polite">
+        {total + (comments.length > total ? 1 : 0)} comments
+      </p>
+    </div>
   );
 }

@@ -18,7 +18,12 @@ export async function listTeams(user: AuthedUser) {
       description: true,
       isActive: true,
       createdAt: true,
-      _count: { select: { memberships: { where: { isActive: true } } } },
+      _count: {
+        select: {
+          memberships: { where: { isActive: true } },
+          workItems: true,
+        },
+      },
     },
     orderBy: { key: "asc" },
   });
@@ -35,6 +40,7 @@ export async function listTeams(user: AuthedUser) {
     return {
       ...rest,
       memberCount: _count.memberships,
+      workItemCount: _count.workItems,
       userRole: membershipByTeam.get(t.id) ?? null,
     };
   });

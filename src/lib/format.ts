@@ -123,6 +123,21 @@ export function pluralize(count: number, singular: string, plural?: string): str
   return count === 1 ? singular : (plural ?? `${singular}s`);
 }
 
+/**
+ * Whether a due date is in the past for an item that is still active.
+ * Resolved and closed items are never treated as overdue.
+ */
+export function isOverdueStatus(
+  dueDate: string | Date | null | undefined,
+  status: string,
+): boolean {
+  if (!dueDate) return false;
+  if (status === "RESOLVED" || status === "CLOSED") return false;
+  const date = dueDate instanceof Date ? dueDate : new Date(dueDate);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getTime() < Date.now();
+}
+
 export function humanizeEnum(value: string): string {
   return value
     .replaceAll("_", " ")

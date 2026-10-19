@@ -34,6 +34,9 @@ export interface WorkItem {
   type: string;
   status: string;
   priority: string;
+  teamId: string;
+  assigneeId: string | null;
+  reporterId: string;
   team: { id: string; key: string; name: string };
   assignee: { id: string; name: string | null; email: string } | null;
   reporter: { id: string; name: string | null; email: string };
@@ -44,6 +47,15 @@ export interface WorkItem {
   updatedAt: string;
 }
 
+export interface Comment {
+  id: string;
+  workItemId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  author: { id: string; name: string | null; email: string };
+}
+
 export interface Team {
   id: string;
   key: string;
@@ -52,12 +64,12 @@ export interface Team {
   isActive: boolean;
   memberCount: number;
   userRole: string | null;
-  memberships: Array<{
+  workItemCount: number;
+  memberships?: Array<{
     id: string;
     user: { id: string; name: string | null; email: string; role: string };
     role: string;
   }>;
-  workItemCount: number;
 }
 
 export interface Approval {
@@ -68,7 +80,14 @@ export interface Approval {
   decidedBy: { id: string; name: string | null; email: string } | null;
   decidedAt: string | null;
   createdAt: string;
-  workItem: { id: string; publicKey: string; title: string };
+  workItem: {
+    id: string;
+    publicKey: string;
+    title: string;
+    status: string;
+    teamId?: string;
+    team?: { id: string; key: string; name: string };
+  };
 }
 
 export interface ActivityEvent {

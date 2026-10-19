@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import {
   formatDueDate,
   formatNumber,
+  isOverdueStatus,
   pluralize,
 } from "@/lib/format";
 import {
@@ -488,11 +489,7 @@ export function WorkItemsView({
                     </TableHeader>
                     <TableBody>
                       {data.items.map((item) => {
-                        const overdueItem =
-                          Boolean(item.dueDate) &&
-                          new Date(item.dueDate as string).getTime() < Date.now() &&
-                          item.status !== "RESOLVED" &&
-                          item.status !== "CLOSED";
+                        const overdueItem = isOverdueStatus(item.dueDate, item.status);
 
                         return (
                           <TableRow key={item.id} className="group">
@@ -569,11 +566,7 @@ export function WorkItemsView({
 
                 <div className="divide-y divide-border/70 md:hidden" aria-busy={loading}>
                   {data.items.map((item) => {
-                    const overdueItem =
-                      Boolean(item.dueDate) &&
-                      new Date(item.dueDate as string).getTime() < Date.now() &&
-                      item.status !== "RESOLVED" &&
-                      item.status !== "CLOSED";
+                    const overdueItem = isOverdueStatus(item.dueDate, item.status);
                     return (
                       <Link
                         key={item.id}

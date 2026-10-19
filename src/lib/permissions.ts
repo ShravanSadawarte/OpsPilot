@@ -110,7 +110,9 @@ export async function canCreateWorkItem(
 ): Promise<boolean> {
   if (user.role === UserRole.ADMIN) return true;
   if (user.role === UserRole.MANAGER) return true;
-  const { role } = await getEffectiveRole(user, teamId);
+  const { role, membership } = await getEffectiveRole(user, teamId);
+  // A user without an active membership has no standing in the team.
+  if (!membership) return false;
   return (
     role === UserRole.TEAM_LEAD ||
     role === UserRole.MANAGER ||

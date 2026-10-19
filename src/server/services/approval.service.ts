@@ -70,7 +70,16 @@ export async function listPendingApprovals(user: AuthedUser) {
       workItem: { teamId: { in: ids } },
     },
     include: {
-      workItem: { select: { id: true, publicKey: true, title: true, status: true } },
+      workItem: {
+        select: {
+          id: true,
+          publicKey: true,
+          title: true,
+          status: true,
+          teamId: true,
+          team: { select: { id: true, key: true, name: true } },
+        },
+      },
       requestedBy: { select: { id: true, name: true, email: true } },
     },
     orderBy: { createdAt: "asc" },
