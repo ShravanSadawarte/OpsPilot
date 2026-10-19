@@ -9,10 +9,10 @@ import { ActivityTimeline } from "@/components/work-items/activity-timeline";
 export default async function WorkItemDetailPage({ params }: { params: { id: string } }) {
   const user = await requireUser();
   const result = await getWorkItem(user, params.id);
-  const item = result.data as any;
+  const item = (await result.json()).data as any;
 
-  const activityResult = await listActivity(user, params.id, { page: 1, pageSize: 50 });
-  const activity = activityResult.data as any;
+  const activityResult = await listActivity({ user, workItemId: params.id, pagination: { page: 1, pageSize: 50 } });
+  const activity = (await activityResult.json()).data as any;
 
   return (
     <div className="space-y-6">

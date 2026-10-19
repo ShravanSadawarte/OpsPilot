@@ -30,7 +30,7 @@ import {
   type AuthedUser,
 } from "@/lib/permissions";
 import { isValidTransition } from "@/lib/workflow";
-import { WorkItemStatus, WorkItemType, Priority, Prisma } from "@prisma/client";
+import { WorkItemStatus, WorkItemType, Priority, Prisma, ActivityType } from "@prisma/client";
 
 /** Compute a stable fingerprint of a request payload for idempotency. */
 function fingerprintOf(payload: unknown): string {
@@ -379,9 +379,10 @@ export async function updateWorkItem(
 
     await logActivity({ workItemId, actorId: user.id, type: "UPDATED", meta: { fields: changedFields.join(", ") } });
     return ok(updated);
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Prisma P2025: record not found -> version mismatch -> conflict
-    if (e?.code === "P2025") {
+    const err = e as { code?: string };
+    if (err.code === "P2025") {
       throw new AppError(
         409,
         ErrorCode.VERSION_CONFLICT,
@@ -471,8 +472,9 @@ export async function transitionWorkItem(
     }
 
     return ok(updated);
-  } catch (e: any) {
-    if (e?.code === "P2025") {
+  } catch (e: unknown) {
+    const err = e as { code?: string };
+    if (err.code === "P2025") {
       throw new AppError(
         409,
         ErrorCode.VERSION_CONFLICT,
@@ -535,12 +537,12 @@ export async function assignWorkItem(
       workItemId,
       actorId: user.id,
       type: assigneeId ? "ASSIGNED" : "UNASSIGNED",
-      meta: assigneeId ? { assigneeName: (updated.assignee as any)?.name ?? assigneeId } : {},
+      meta: assigneeId ? { assigneeName: (updated.assignee as { name?: string | null })?.name ?? assigneeId } : {},
     });
 
     return ok(updated);
-  } catch (e: any) {
-    if (e?.code === "P2025") {
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2025") {
       throw new AppError(409, ErrorCode.VERSION_CONFLICT, "Stale assignment attempt.");
     }
     throw e;
@@ -597,8 +599,8 @@ export async function claimWorkItem(
     });
 
     return ok(updated);
-  } catch (e: any) {
-    if (e?.code === "P2025") {
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2025") {
       // Either version mismatch or already assigned by someone else
       const current = await db.workItem.findUnique({ where: { id: workItemId } });
       if (current?.assigneeId) {
@@ -728,7 +730,7 @@ export async function logActivity(args: {
     data: {
       workItemId: args.workItemId,
       actorId: args.actorId,
-      type: args.type as any,
+      type: args.type as ActivityType,
       metadata: (args.meta ?? {}) as Prisma.InputJsonValue,
     },
   });

@@ -1,17 +1,18 @@
-import { listTeams, addTeamMember, removeTeamMember } from "@/server/services/team.service";
+import { listTeams } from "@/server/services/team.service";
 import { requireUser } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, Plus, Trash2 } from "lucide-react";
+import type { Team } from "@/types/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function TeamsPage() {
   const user = await requireUser();
   const result = await listTeams(user);
-  const teams = (result.data as any)?.items ?? [];
+  const teams = ((await result.json()).data as { items: Team[] }).items ?? [];
 
   return (
     <div className="space-y-6">
@@ -41,7 +42,7 @@ export default async function TeamsPage() {
               </TableHeader>
               <TableBody>
                 {teams.length ? (
-                  teams.map((t: any) => (
+                  teams.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-mono text-xs">{t.key}</TableCell>
                       <TableCell className="font-medium">{t.name}</TableCell>
@@ -70,18 +71,25 @@ export default async function TeamsPage() {
   );
 }
 
-function TeamMembers({ teamId, memberships, currentUserId, canManage }: any) {
+type TeamMembersProps = {
+  teamId: string;
+  memberships: Team["memberships"];
+  currentUserId: string;
+  canManage: boolean;
+};
+
+function TeamMembers({ teamId, memberships, currentUserId, canManage }: TeamMembersProps) {
   return (
     <div className="flex flex-col gap-1">
-      {(memberships ?? []).map((m: any) => (
+      {(memberships ?? []).map((m) => (
         <div key={m.id} className="flex items-center gap-2 text-xs">
           <span className="truncate max-w-[100px]">{m.user.name}</span>
           <Badge variant="outline" className="text-[10px]">{m.role}</Badge>
-          {canManage && m.userId !== currentUserId && (
+          {canManage && m.user.id !== currentUserId && (
             <button
               onClick={() => {
                 if (window.confirm(`Remove ${m.user.name} from this team?`)) {
-                  fetch(`/api/v1/teams/${teamId}/members?teamId=${teamId}&userId=${m.userId}`, { method: "DELETE" }).then(() => window.location.reload());
+                  fetch(`/api/v1/teams/${teamId}/members?teamId=${teamId}&userId=${m.user.id}`, { method: "DELETE" }).then(() => window.location.reload());
                 }
               }}
               className="text-destructive hover:bg-destructive/10 rounded p-1"

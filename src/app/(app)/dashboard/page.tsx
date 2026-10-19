@@ -1,12 +1,13 @@
 import { dashboardMetrics } from "@/server/services/dashboard.service";
 import { requireUser } from "@/lib/auth";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { DashboardMetrics } from "@/types/api";
 
 export default async function DashboardPage() {
   const user = await requireUser();
   const result = await dashboardMetrics(user);
-  const data = result.data as any;
+  const data = (await result.json()).data as DashboardMetrics;
 
   return (
     <div className="space-y-6">
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
               <CardTitle>Status summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {(data.statusSummary ?? []).map((s: any) => (
+              {(data.statusSummary ?? []).map((s) => (
                 <div key={s.status} className="flex items-center justify-between py-1.5 text-sm">
                   <span className="text-muted-foreground">{s.status}</span>
                   <span className="font-medium">{s.count}</span>
@@ -46,7 +47,7 @@ export default async function DashboardPage() {
               <CardTitle>Priority summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {(data.prioritySummary ?? []).map((p: any) => (
+              {(data.prioritySummary ?? []).map((p) => (
                 <div key={p.priority} className="flex items-center justify-between py-1.5 text-sm">
                   <span className="text-muted-foreground">{p.priority}</span>
                   <Badge variant={priorityVariant(p.priority)}>{p.count}</Badge>
@@ -67,7 +68,7 @@ export default async function DashboardPage() {
             <CardContent>
               {data.attentionRequired?.length ? (
                 <ul className="space-y-3">
-                  {(data.attentionRequired as any[]).map((w: any) => (
+                  {(data.attentionRequired ?? []).map((w) => (
                     <li key={w.id} className="flex items-center gap-3 p-2 rounded-md bg-muted/50">
                       <span className="text-xs font-mono text-muted-foreground">{w.publicKey}</span>
                       <span className="flex-1 text-sm">{w.title}</span>
@@ -91,7 +92,7 @@ export default async function DashboardPage() {
             <CardContent className="space-y-3">
               {data.recentActivity?.length ? (
                 <ul className="space-y-3">
-                  {(data.recentActivity as any[]).map((e: any) => (
+                  {(data.recentActivity ?? []).map((e) => (
                     <li key={e.id} className="flex items-start gap-3 text-sm">
                       <span className="text-muted-foreground shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
                       <div className="flex-1">

@@ -51,12 +51,15 @@ const TableHead = React.forwardRef<
 ));
 TableHead.displayName = "th";
 
-const TableCell = React.forwardRef<
-  HTMLTableCellElement,
-  React.HTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn("p-4", className)} {...props} />
-));
+interface TableCellProps extends React.HTMLAttributes<HTMLTableCellElement> {
+  colSpan?: number;
+  rowSpan?: number;
+}
+const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
+  ({ className, colSpan, rowSpan, ...props }, ref) => (
+    <td ref={ref} colSpan={colSpan} rowSpan={rowSpan} className={cn("p-4", className)} {...props} />
+  ),
+);
 TableCell.displayName = "td";
 
 const TableCaption = React.forwardRef<

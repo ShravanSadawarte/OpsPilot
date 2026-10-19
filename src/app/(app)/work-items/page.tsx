@@ -78,7 +78,7 @@ export default function WorkItemsPage() {
 
   const statusBadge = (s: Status) => {
     const v: Record<Status, string> = { OPEN: "default", IN_PROGRESS: "default", BLOCKED: "destructive", IN_REVIEW: "outline", RESOLVED: "secondary", CLOSED: "secondary" };
-    return <Badge variant={v[s]}>{s}</Badge>;
+    return <Badge variant={(v[s] as "default" | "destructive" | "outline" | "secondary")}>{s}</Badge>;
   };
 
   return (
@@ -89,7 +89,7 @@ export default function WorkItemsPage() {
           <p className="text-sm text-muted-foreground">Track, assign, and manage operational work.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/work-items/create" asChild>
+          <Link href="/work-items/create">
             <Button className="hidden sm:inline">
               <Plus className="size-4 mr-2" /> Create work item
             </Button>
@@ -105,15 +105,15 @@ export default function WorkItemsPage() {
           <CardTitle className="flex items-center gap-2"><Search className="size-4" /> Filters</CardTitle>
         </CardHeader>
         <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Select value={status} onChange={(v) => router.push(`/work-items?status=${v}&page=1`)} placeholder="Status">
+          <Select value={status} onChange={(v) => router.push(`/work-items?status=${v}&page=1`)}>
             <option></option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
-          <Select value={priority} onChange={(v) => router.push(`/work-items?priority=${v}&page=1`)} placeholder="Priority">
+          <Select value={priority} onChange={(v) => router.push(`/work-items?priority=${v}&page=1`)}>
             <option></option>
             {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
           </Select>
-          <Select value={type} onChange={(v) => router.push(`/work-items?type=${v}&page=1`)} placeholder="Type">
+          <Select value={type} onChange={(v) => router.push(`/work-items?type=${v}&page=1`)}>
             <option></option>
             {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </Select>

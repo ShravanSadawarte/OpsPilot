@@ -41,8 +41,7 @@ export default function LoginPage() {
       }
       // Fetch CSRF token for future mutations
       await fetch("/api/v1/auth/csrf");
-      const cb = router.query.callbackUrl as string | undefined;
-      router.push(cb || "/dashboard");
+      router.push("/dashboard");
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e?.message ?? "Unexpected error." });
     } finally {

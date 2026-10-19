@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api-client";
@@ -33,7 +32,6 @@ export default function CreateWorkItemPage() {
   const [teams, setTeams] = useState<Team[]>([]);
 
   const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
     defaultValues: { title: "", description: "", type: "OPERATIONAL_TASK", priority: "MEDIUM", teamId: "", assigneeId: undefined, dueDate: undefined },
   });
 

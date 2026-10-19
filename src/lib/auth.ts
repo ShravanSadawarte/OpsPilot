@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { argon2id, hash, verify } from "argon2";
 import { createHash, randomBytes } from "crypto";
+import { UserRole } from "@prisma/client";
 import { db } from "./db";
 import { AppError, ErrorCode } from "./http";
 
@@ -117,7 +118,7 @@ export async function requireUser(): Promise<{
   id: string;
   email: string;
   name: string | null;
-  role: string;
+  role: UserRole;
   isActive: boolean;
 }> {
   const s = await getSession();

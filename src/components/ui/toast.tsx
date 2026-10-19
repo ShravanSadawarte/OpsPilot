@@ -38,12 +38,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (props: Omit<Toast, "id">) => {
       const id = genId();
       setState((s) => ({ toasts: [...s.toasts, { ...props, id }] }));
-      if (props.duration !== false) {
-        const timer = setTimeout(() => {
-          setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-        }, props.duration ?? 4000);
-        // cleanup stored on the toast? not needed for simple impl
-      }
+      const delay = props.duration ?? 4000;
+      const timer = setTimeout(() => {
+        setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+      }, delay);
       return id;
     },
     [],

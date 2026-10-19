@@ -1,68 +1,49 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api-client";
 import { ArrowRight, UserPlus } from "lucide-react";
 
-const transitionSchema = z.object({
-  status: z.enum(["OPEN", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "RESOLVED", "CLOSED"]),
-  version: z.number().int(),
-});
+type Item = {
+  id: string;
+  publicKey: string;
+  title: string;
+  status: string;
+  version: number;
+  assignee: { id: string; name: string } | null;
+};
 
-const assignSchema = z.object({
-  assigneeId: z.string().optional(),
-  version: z.number().int(),
-});
-
-type Status = string;
-
-export function WorkItemActions({ item, user }: { item: any; user: any }) {
+export function WorkItemActions({ item, user }: { item: Item; user: any }) {
   const [openTransition, setOpenTransition] = useState(false);
   const [openAssign, setOpenAssign] = useState(false);
-  const [conflict, setConflict] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const transForm = useForm<z.infer<typeof transitionSchema>>({
-    resolver: zodResolver(transitionSchema),
+  const transForm = useForm<{ status: string; version: number }>({
     defaultValues: { status: item.status, version: item.version },
   });
-
-  const assignForm = useForm<z.infer<typeof assignSchema>>({
-    resolver: zodResolver(assignSchema),
+  const assignForm = useForm<{ assigneeId: string; version: number }>({
     defaultValues: { assigneeId: item.assignee?.id ?? "", version: item.version },
   });
 
-  async function transition(nextStatus: string) {
-    transForm.setValue("status", nextStatus);
-    transForm.setValue("version", item.version);
-    const valid = await transForm.validate();
-    if (valid) {
-      setOpenTransition(true);
-    }
-  }
-
-  async function submitTransition(values: z.infer<typeof transitionSchema>) {
+  async function submitTransition(values: { status: string; version: number }) {
     try {
       const res = await apiFetch(`/api/v1/work-items/${item.id}`, {
         method: "POST",
         body: JSON.stringify({ status: values.status, version: values.version }),
       });
-      const json = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
-          setConflict(json.error?.message ?? "Conflict");
-          toast({ variant: "destructive", title: "Conflict", description: json.error?.message ?? "Your changes conflict with a newer update. Refresh and reapply." });
+          const json = await res.json();
+          toast({ variant: "destructive", title: "Conflict", description: json.error?.message ?? "Version conflict" });
         } else {
-          toast({ variant: "destructive", title: "Error", description: json.error?.message ?? "Transition failed" });
+          toast({ variant: "destructive", title: "Error", description: "Transition failed" });
         }
         return;
       }
@@ -73,18 +54,18 @@ export function WorkItemActions({ item, user }: { item: any; user: any }) {
     }
   }
 
-  async function submitAssign(values: z.infer<typeof assignSchema>) {
+  async function submitAssign(values: { assigneeId: string; version: number }) {
     try {
       const res = await apiFetch(`/api/v1/work-items/${item.id}/assign`, {
         method: "POST",
         body: JSON.stringify({ assigneeId: values.assigneeId || null, version: values.version }),
       });
-      const json = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
+          const json = await res.json();
           toast({ variant: "destructive", title: "Conflict", description: json.error?.message ?? "Assignment conflict" });
         } else {
-          toast({ variant: "destructive", title: "Error", description: json.error?.message ?? "Assignment failed" });
+          toast({ variant: "destructive", title: "Error", description: "Assignment failed" });
         }
         return;
       }
@@ -95,7 +76,7 @@ export function WorkItemActions({ item, user }: { item: any; user: any }) {
     }
   }
 
-  const statusOptions: Status[] = ["OPEN", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "RESOLVED", "CLOSED"];
+  const statusOptions = ["OPEN", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "RESOLVED", "CLOSED"] as const;
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -103,11 +84,14 @@ export function WorkItemActions({ item, user }: { item: any; user: any }) {
         {statusOptions.map((s) => (
           <Button
             key={s}
-            onClick={() => transition(s)}
+            onClick={() => {
+              transForm.setValue("status", s);
+              transForm.setValue("version", item.version);
+              setOpenTransition(true);
+            }}
             disabled={s === item.status}
             variant={s === item.status ? "outline" : "default"}
             size="sm"
-            className={s === "RESOLVED" || s === "CLOSED" ? "bg-secondary text-secondary-foreground" : undefined}
           >
             {s}
           </Button>
@@ -122,39 +106,27 @@ export function WorkItemActions({ item, user }: { item: any; user: any }) {
         </DialogTrigger>
         <DialogContent>
           <DialogTitle>Transition status</DialogTitle>
-          <DialogDescription>Move "{item.title}" to a new status.</DialogDescription>
-          <Form {...transForm}>
-            <form onSubmit={transForm.handleSubmit(submitTransition)} className="space-y-4">
-              <FormField
-                control={transForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <FormControl>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        {statusOptions.map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={transForm.control}
-                name="version"
-                render={({ field }) => <Input type="hidden" {...field} />}
-              />
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setOpenTransition(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Transition</Button>
-              </div>
-            </form>
-          </Form>
+          <DialogDescription>Move &quot;{item.title}&quot; to a new status.</DialogDescription>
+          <form onSubmit={transForm.handleSubmit(submitTransition)} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">Status</label>
+              <Select
+                onChange={(e) => transForm.setValue("status", e.target.value)}
+                value={transForm.getValues("status")}
+              >
+                {statusOptions.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </Select>
+              <Input type="hidden" {...transForm.register("version")} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpenTransition(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Transition</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -166,52 +138,28 @@ export function WorkItemActions({ item, user }: { item: any; user: any }) {
         </DialogTrigger>
         <DialogContent>
           <DialogTitle>Assign owner</DialogTitle>
-          <DialogDescription>Assign "{item.title}" to a team member.</DialogDescription>
-          <Form {...assignForm}>
-            <form onSubmit={assignForm.handleSubmit(submitAssign)} className="space-y-4">
-              <FormField
-                control={assignForm.control}
-                name="assigneeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assignee</FormLabel>
-                    <FormControl>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <option value="">Unassign</option>
-                        <option value="current-user">Me ({user.name})</option>
-                      </Select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={assignForm.control}
-                name="version"
-                render={({ field }) => <Input type="hidden" {...field} />}
-              />
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setOpenAssign(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Assign</Button>
-              </div>
-            </form>
-          </Form>
+          <DialogDescription>Assign &quot;{item.title}&quot; to a team member.</DialogDescription>
+          <form onSubmit={assignForm.handleSubmit(submitAssign)} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">Assignee</label>
+              <Select
+                onChange={(e) => assignForm.setValue("assigneeId", e.target.value)}
+                value={assignForm.getValues("assigneeId")}
+              >
+                <option value="">Unassigned</option>
+                <option value="current-user">Me ({user.name})</option>
+              </Select>
+              <Input type="hidden" {...assignForm.register("version")} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpenAssign(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Assign</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
-
-      {conflict && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/50 p-3 text-xs text-destructive">
-          {conflict}
-          <button
-            onClick={() => { setConflict(null); window.location.reload(); }}
-            className="ml-2 underline text-sm"
-          >
-            Refresh
-          </button>
-        </div>
-      )}
     </div>
   );
 }

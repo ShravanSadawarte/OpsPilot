@@ -11,7 +11,7 @@ export default function AppLayout({
 }) {
   const { user, isLoading } = useUser();
 
-  if (isLoading) return null;
+  if (isLoading || !user) return null;
 
   return (
     <div className="flex h-screen bg-gray-50">

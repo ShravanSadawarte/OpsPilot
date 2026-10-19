@@ -8,11 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { validateForm } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api-client";
 import { ArrowLeft, RefreshCw } from "lucide-react";
+import type { WorkItem } from "@/types/api";
 
 const schema = z.object({
   title: z.string().min(1, "Title is required").max(200),
@@ -33,7 +34,6 @@ export default function EditWorkItemPage({ params }: { params: { id: string } })
   const [serverVersion, setServerVersion] = useState<number | null>(null);
 
   const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
     defaultValues: { title: "", description: "", type: "OPERATIONAL_TASK", priority: "MEDIUM", status: "OPEN", assigneeId: undefined, dueDate: undefined, version: 1 },
   });
 
@@ -41,43 +41,48 @@ export default function EditWorkItemPage({ params }: { params: { id: string } })
     const res = await fetch(`/api/v1/work-items?workItemId=${params.id}`);
     if (!res.ok) { router.push("/work-items"); return; }
     const json = await res.json();
-    const item = json.data;
+    const item = json.data as WorkItem;
     setServerVersion(item.version);
     form.reset({
       title: item.title,
       description: item.description ?? "",
-      type: item.type,
-      priority: item.priority,
-      status: item.status,
+      type: item.type as z.infer<typeof schema>["type"],
+      priority: item.priority as z.infer<typeof schema>["priority"],
+      status: item.status as z.infer<typeof schema>["status"],
       assigneeId: item.assignee?.id ?? undefined,
       dueDate: item.dueDate ? new Date(item.dueDate).toISOString().slice(0, 16) : undefined,
       version: item.version,
     });
   }, [params.id, form, router]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      await load();
+    })();
+  }, [load]);
 
   async function onSubmit(values: z.infer<typeof schema>) {
     setLoading(true);
     setConflict(null);
     try {
+      const validated = validateForm(schema, values);
       const res = await apiFetch(`/api/v1/work-items?workItemId=${params.id}`, {
         method: "PATCH",
-        body: JSON.stringify(values),
+        body: JSON.stringify(validated),
       });
       const json = await res.json();
       if (!res.ok) {
         if (res.status === 409) {
-          setConflict(json.error?.message ?? "This work item was updated by another user. Your edits are preserved—refresh and reapply.");
-          toast({ variant: "destructive", title: "Conflict", description: json.error?.message ?? "Version conflict" });
+          setConflict((json as { error?: { message?: string } }).error?.message ?? "This work item was updated by another user. Your edits are preserved—refresh and reapply.");
+          toast({ variant: "destructive", title: "Conflict", description: (json as { error?: { message?: string } }).error?.message ?? "Version conflict" });
         } else {
-          toast({ variant: "destructive", title: "Error", description: json.error?.message ?? "Update failed" });
+          toast({ variant: "destructive", title: "Error", description: (json as { error?: { message?: string } }).error?.message ?? "Update failed" });
         }
         return;
       }
       router.push(`/work-items/${params.id}`);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e?.message });
+    } catch (e: unknown) {
+      toast({ variant: "destructive", title: "Error", description: (e as Error)?.message ?? "Update failed" });
     } finally {
       setLoading(false);
     }
