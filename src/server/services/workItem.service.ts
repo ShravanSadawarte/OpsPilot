@@ -31,21 +31,21 @@ import {
 } from "@/lib/permissions";
 import { isValidTransition } from "@/lib/workflow";
 import { WorkItemStatus, WorkItemType, Priority, Prisma, ActivityType } from "@prisma/client";
+import { createHash } from "crypto";
 
-/** Compute a stable fingerprint of a request payload for idempotency. */
+/** Compute a stable fingerprint of a validated request payload for idempotency. */
 function fingerprintOf(payload: unknown): string {
-  const canonical = JSON.stringify(payload);
-  // Avoid importing node:crypto twice; use a simple stable hash is not
-  // cryptographically strong but sufficient as a request fingerprint.
-  // We use the Web Crypto API subtle digest available in Next.js server.
-  // For server-side determinism use a lightweight approach:
-  let hash = 0;
-  for (let i = 0; i < canonical.length; i++) {
-    const char = canonical.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return `${canonical.length}:${hash}`;
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+/** Detect a Prisma/PG unique-constraint violation without relying on class identity. */
+function isUniqueConstraintError(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code?: unknown }).code === "P2002"
+  );
 }
 
 /** Build the human-readable description for an activity event. */
@@ -205,7 +205,6 @@ export async function createWorkItem(
   user: AuthedUser,
   input: CreateWorkItemInput,
   idempotencyKey?: string,
-  idempotencyFingerprint?: string,
 ) {
   // Authorization
   const allowed = await canCreateWorkItem(user, input.teamId);
@@ -219,14 +218,17 @@ export async function createWorkItem(
     throw new AppError(404, ErrorCode.NOT_FOUND, "Team not found.");
   }
 
-  // Idempotency: check existing record scoped to actor + key
+  // Derived from the validated payload, never from a client-supplied header,
+  // so callers cannot forge a matching fingerprint.
+  const fingerprint = fingerprintOf(input);
+
+  // Idempotency: check existing record scoped to actor + key.
   if (idempotencyKey) {
     const existing = await db.idempotencyRecord.findUnique({
       where: { actorId_key: { actorId: user.id, key: idempotencyKey } },
     });
     if (existing) {
-      const storedFingerprint = existing.fingerprint as string;
-      if (storedFingerprint !== idempotencyFingerprint) {
+      if (existing.fingerprint !== fingerprint) {
         throw new AppError(
           409,
           ErrorCode.IDEMPOTENCY_CONFLICT,
@@ -238,60 +240,83 @@ export async function createWorkItem(
     }
   }
 
-  const result = await db.$transaction(async (tx) => {
-    // Allocate public key concurrency-safely via PostgreSQL sequence.
-    const seq = await tx.$queryRawUnsafe<{ nextval: bigint }[]>(
-      `SELECT nextval('workitem_public_key_seq') AS nextval`,
-    );
-    const publicKey = `OPS-${Number(seq[0]?.nextval ?? 1001)}`;
+  try {
+    const result = await db.$transaction(async (tx) => {
+      // Allocate public key concurrency-safely via PostgreSQL sequence.
+      const seq = await tx.$queryRawUnsafe<{ nextval: bigint }[]>(
+        `SELECT nextval('workitem_public_key_seq') AS nextval`,
+      );
+      const publicKey = `OPS-${Number(seq[0]?.nextval ?? 1001)}`;
 
-    const workItem = await tx.workItem.create({
-      data: {
-        publicKey,
-        title: input.title,
-        description: input.description ?? null,
-        type: input.type,
-        priority: input.priority,
-        teamId: input.teamId,
-        assigneeId: input.assigneeId ?? null,
-        reporterId: user.id,
-        dueDate: input.dueDate ? new Date(input.dueDate) : null,
-        version: 1,
-      },
-      include: {
-        team: { select: { id: true, key: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        reporter: { select: { id: true, name: true, email: true } },
-      },
+      const workItem = await tx.workItem.create({
+        data: {
+          publicKey,
+          title: input.title,
+          description: input.description ?? null,
+          type: input.type,
+          priority: input.priority,
+          teamId: input.teamId,
+          assigneeId: input.assigneeId ?? null,
+          reporterId: user.id,
+          dueDate: input.dueDate ? new Date(input.dueDate) : null,
+          version: 1,
+        },
+        include: {
+          team: { select: { id: true, key: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+          reporter: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      // Transactional audit event: committed only if the mutation commits.
+      await tx.activityEvent.create({
+        data: {
+          workItemId: workItem.id,
+          actorId: user.id,
+          type: "CREATED",
+          metadata: { publicKey, title: workItem.title },
+        },
+      });
+
+      // Persist the idempotency record in the same transaction. A concurrent
+      // duplicate hits the unique (actorId, key) constraint and rolls back its
+      // work item, so no orphaned/duplicate creation can occur.
+      if (idempotencyKey) {
+        await tx.idempotencyRecord.create({
+          data: {
+            actorId: user.id,
+            key: idempotencyKey,
+            fingerprint,
+            statusCode: 201,
+            body: JSON.parse(JSON.stringify(workItem)) as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      return workItem;
     });
 
-    // Transactional audit event: committed only if the mutation commits.
-    await tx.activityEvent.create({
-      data: {
-        workItemId: workItem.id,
-        actorId: user.id,
-        type: "CREATED",
-        metadata: { publicKey, title: workItem.title },
-      },
-    });
-
-    return workItem;
-  });
-
-  // Persist idempotency record for the successful result.
-  if (idempotencyKey) {
-    await db.idempotencyRecord.create({
-      data: {
-        actorId: user.id,
-        key: idempotencyKey,
-        fingerprint: idempotencyFingerprint ?? fingerprintOf(input),
-        statusCode: 201,
-        body: { workItemId: result.id, publicKey: result.publicKey } as Prisma.InputJsonValue,
-      },
-    });
+    return ok(result, { status: 201 });
+  } catch (e) {
+    if (idempotencyKey && isUniqueConstraintError(e)) {
+      // The concurrent winner has committed by the time PostgreSQL raises the
+      // unique violation, so its record is available for an identical replay.
+      const existing = await db.idempotencyRecord.findUnique({
+        where: { actorId_key: { actorId: user.id, key: idempotencyKey } },
+      });
+      if (existing) {
+        if (existing.fingerprint !== fingerprint) {
+          throw new AppError(
+            409,
+            ErrorCode.IDEMPOTENCY_CONFLICT,
+            "Idempotency key reused with a different payload.",
+          );
+        }
+        return ok(existing.body as unknown, { status: 200 });
+      }
+    }
+    throw e;
   }
-
-  return ok(result, { status: 201 });
 }
 
 /* ======================================================================== */

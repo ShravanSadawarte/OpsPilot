@@ -49,8 +49,7 @@ export const POST = withAuth(
   async (user, req: NextRequest) => {
     const body = CreateWorkItemSchema.parse(await jsonBody(req));
     const idempotencyKey = req.headers.get("idempotency-key") || undefined;
-    const idempotencyFingerprint = req.headers.get("idempotency-fingerprint") || undefined;
-    const result = await createWorkItem(user, body, idempotencyKey, idempotencyFingerprint);
+    const result = await createWorkItem(user, body, idempotencyKey);
     return result;
   },
   { csrf: true },

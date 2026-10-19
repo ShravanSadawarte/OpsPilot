@@ -123,8 +123,10 @@ restricted to teams the caller can see.
 **Response (200)** `{ "data": { "items": [WorkItem], "meta": { "page","pageSize","total","totalPages" } } }`
 
 ### POST /api/v1/work-items
-Create a work item. Supports `Idempotency-Key` and `Idempotency-Fingerprint`
-headers. Requires auth + CSRF.
+Create a work item. Supports `Idempotency-Key`; the server derives a SHA-256
+fingerprint from the validated payload (never from a client header). An
+identical replay returns `200` with the original item; reusing the key with a
+different payload returns `409 IDEMPOTENCY_CONFLICT`. Requires auth + CSRF.
 
 **Body**
 ```json
