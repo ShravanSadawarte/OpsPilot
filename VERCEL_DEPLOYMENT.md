@@ -198,7 +198,7 @@ DATABASE_URL_DIRECT="<staging direct URL>" NODE_ENV=development npm run db:seed
 | Session cookie not set | `SESSION_COOKIE_SECURE` mismatch | On Vercel (HTTPS), set `SESSION_COOKIE_SECURE=true`. |
 | Login rate limit too strict | `LOGIN_RATE_LIMIT_MAX` too low | Increase in Vercel env vars. |
 | Prisma migrate deploy fails | Wrong `DATABASE_URL_DIRECT` | Use the direct (non-pooled) URL. |
-| 403 on all mutating API routes | `AUTH_SECRET` missing or changed | Set/align `AUTH_SECRET` in Vercel env vars, then reload the page to refresh the CSRF cookie. |
+| 403 on all mutating API routes | `AUTH_SECRET` missing or changed | Set/align `AUTH_SECRET` in Vercel env vars, then sign out and sign in again to refresh the CSRF cookie. |
 
 ---
 
