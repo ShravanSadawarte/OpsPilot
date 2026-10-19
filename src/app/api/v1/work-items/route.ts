@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth, jsonBody } from "@/lib/api-handler";
@@ -42,7 +42,7 @@ export const GET = withAuth(async (user, req: NextRequest) => {
       order: pagination.order,
     },
   });
-  return NextResponse.json(result, { status: 200 });
+  return result;
 });
 
 export const POST = withAuth(
@@ -51,7 +51,7 @@ export const POST = withAuth(
     const idempotencyKey = req.headers.get("idempotency-key") || undefined;
     const idempotencyFingerprint = req.headers.get("idempotency-fingerprint") || undefined;
     const result = await createWorkItem(user, body, idempotencyKey, idempotencyFingerprint);
-    return NextResponse.json(result, { status: 201 });
+    return result;
   },
   { csrf: true },
 );

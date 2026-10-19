@@ -92,7 +92,7 @@ export default function LoginPage() {
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
         <div className="text-xs text-center text-muted-foreground">
-          Demo: admin@example.com / admin123  ·  manager@example.com / manager123  ·  member@example.com / member123
+          Demo: admin@example.com / password123  ·  manager@example.com / password123  ·  member.one@example.com / password123
         </div>
       </CardFooter>
     </Card>

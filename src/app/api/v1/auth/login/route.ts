@@ -1,7 +1,7 @@
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { AppError, ErrorCode, err, internalError, requestId } from "@/lib/http";
+import { AppError, ErrorCode, requestId, toErrorResponse } from "@/lib/http";
 import { login } from "@/server/services/auth.service";
 import type { LoginInput } from "@/server/services/auth.service";
 
@@ -17,19 +17,11 @@ export const POST = async (req: NextRequest): Promise<NextResponse> => {
     const body = await jsonBody<LoginInput>(req);
     const forwarded = req.headers.get("x-forwarded-for");
     const ip = forwarded ? forwarded.split(",")[0].trim() : null;
-    const result = await login(body, {
+    return await login(body, {
       ip,
       csrfHeaderToken: req.headers.get("x-csrf-token"),
     });
-    return NextResponse.json(result, { status: 200, headers: { "x-request-id": rid } });
   } catch (e: unknown) {
-    return errorResponse(e, rid);
+    return toErrorResponse(e, { requestId: rid });
   }
 };
-
-function errorResponse(e: unknown, rid: string): NextResponse {
-  if (e instanceof AppError) {
-    return err(e, { requestId: rid });
-  }
-  return internalError((e as Error)?.message ?? "Internal server error", { requestId: rid });
-}

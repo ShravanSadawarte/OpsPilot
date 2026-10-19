@@ -1,7 +1,8 @@
 "use server";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { withAuth, jsonBody } from "@/lib/api-handler";
+import { AppError, ErrorCode } from "@/lib/http";
 import { getTeam, updateTeam } from "@/server/services/team.service";
 import { z } from "zod";
 
@@ -11,22 +12,24 @@ const TeamUpdateSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-export const GET = withAuth(async (_user, req: NextRequest) => {
+export const GET = withAuth(async (user, req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get("teamId");
-  if (!teamId) return NextResponse.json({ error: "teamId required" }, { status: 400 });
-  const result = await getTeam(_user, teamId);
-  return NextResponse.json(result, { status: 200 });
+  if (!teamId) {
+    throw new AppError(400, ErrorCode.VALIDATION_ERROR, "teamId is required.");
+  }
+  return await getTeam(user, teamId);
 });
 
 export const PATCH = withAuth(
   async (user, req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const teamId = searchParams.get("teamId");
-    if (!teamId) return NextResponse.json({ error: "teamId required" }, { status: 400 });
+    if (!teamId) {
+      throw new AppError(400, ErrorCode.VALIDATION_ERROR, "teamId is required.");
+    }
     const body = TeamUpdateSchema.parse(await jsonBody(req));
-    const result = await updateTeam(user, teamId, body);
-    return NextResponse.json(result, { status: 200 });
+    return await updateTeam(user, teamId, body);
   },
   { csrf: true },
 );

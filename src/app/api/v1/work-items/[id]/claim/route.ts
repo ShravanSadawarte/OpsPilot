@@ -1,7 +1,8 @@
 "use server";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { withAuth, jsonBody } from "@/lib/api-handler";
+import { AppError, ErrorCode } from "@/lib/http";
 import { claimWorkItem } from "@/server/services/workItem.service";
 import { z } from "zod";
 
@@ -11,12 +12,12 @@ const ClaimSchema = z.object({
 
 export const POST = withAuth(
   async (user, req: NextRequest) => {
-    const { searchParams } = new URL(req.url);
-    const workItemId = searchParams.get("workItemId");
-    if (!workItemId) return NextResponse.json({ error: "workItemId required" }, { status: 400 });
+    const workItemId = new URL(req.url).searchParams.get("workItemId");
+    if (!workItemId) {
+      throw new AppError(400, ErrorCode.VALIDATION_ERROR, "workItemId is required.");
+    }
     const body = ClaimSchema.parse(await jsonBody(req));
-    const result = await claimWorkItem(user, workItemId, body.version);
-    return NextResponse.json(result, { status: 200 });
+    return await claimWorkItem(user, workItemId, body.version);
   },
   { csrf: true },
 );

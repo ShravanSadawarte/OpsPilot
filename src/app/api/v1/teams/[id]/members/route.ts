@@ -1,7 +1,8 @@
 "use server";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { withAuth, jsonBody } from "@/lib/api-handler";
+import { AppError, ErrorCode } from "@/lib/http";
 import { addTeamMember, removeTeamMember } from "@/server/services/team.service";
 import { z } from "zod";
 
@@ -14,23 +15,31 @@ export const POST = withAuth(
   async (user, req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const teamId = searchParams.get("teamId");
-    if (!teamId) return NextResponse.json({ error: "teamId required" }, { status: 400 });
+    if (!teamId) {
+      throw new AppError(400, ErrorCode.VALIDATION_ERROR, "teamId is required.");
+    }
     const body = MemberSchema.parse(await jsonBody(req));
-    const result = await addTeamMember(user, teamId, {
+    return await addTeamMember(user, teamId, {
       userId: body.userId,
       role: body.role,
     });
-    return NextResponse.json(result, { status: 200 });
   },
   { csrf: true },
 );
 
-export const DELETE = withAuth(async (user, req: NextRequest) => {
-  const { searchParams } = new URL(req.url);
-  const teamId = searchParams.get("teamId");
-  const userId = searchParams.get("userId");
-  if (!teamId || !userId)
-    return NextResponse.json({ error: "teamId and userId required" }, { status: 400 });
-  const result = await removeTeamMember(user, teamId, userId);
-  return NextResponse.json(result, { status: 200 });
-}, { csrf: true });
+export const DELETE = withAuth(
+  async (user, req: NextRequest) => {
+    const { searchParams } = new URL(req.url);
+    const teamId = searchParams.get("teamId");
+    const userId = searchParams.get("userId");
+    if (!teamId || !userId) {
+      throw new AppError(
+        400,
+        ErrorCode.VALIDATION_ERROR,
+        "teamId and userId are required.",
+      );
+    }
+    return await removeTeamMember(user, teamId, userId);
+  },
+  { csrf: true },
+);

@@ -37,8 +37,10 @@ async function hash(pw: string) {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Seeding is disabled in production (NODE_ENV=production).");
+  if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !== "true") {
+    throw new Error(
+      "Seeding is disabled in production (NODE_ENV=production). Set SEED_ALLOW_PRODUCTION=true only for an intentional demo/staging seed.",
+    );
   }
 
   console.log("Seeding development data...");
@@ -249,6 +251,19 @@ async function main() {
       },
     });
   }
+
+  // Keep the public-key sequence ahead of seeded OPS-#### keys so newly
+  // created work items never collide with seed data.
+  await db.$executeRawUnsafe(`
+    SELECT setval(
+      'workitem_public_key_seq',
+      GREATEST(
+        (SELECT COALESCE(MAX(CAST(SUBSTRING("publicKey" FROM 5) AS INTEGER)), 1000) FROM "WorkItem"),
+        1000
+      ),
+      true
+    )
+  `);
 
   // --- Activity events for work items ---
   const wi1 = await db.workItem.findUnique({ where: { publicKey: "OPS-1001" } });

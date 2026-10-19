@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 
 /** Standard envelope for every API response. */
 export interface ApiResponse<T = unknown> {
@@ -92,6 +93,30 @@ export function internalError(
     requestId: options?.requestId,
   };
   return NextResponse.json(body, { status: 500 });
+}
+
+/** Convert a Zod validation failure into a 400 AppError with field details. */
+export function validationErrorFromZod(e: ZodError): AppError {
+  const details: Record<string, string[]> = {};
+  for (const issue of e.issues) {
+    const key = issue.path.length ? issue.path.join(".") : "_";
+    (details[key] ??= []).push(issue.message);
+  }
+  return new AppError(400, ErrorCode.VALIDATION_ERROR, "Validation failed.", details);
+}
+
+/**
+ * Convert any thrown error into the standard error envelope.
+ * Internal error details are logged server-side and never returned to clients.
+ */
+export function toErrorResponse(
+  e: unknown,
+  options?: { requestId?: string },
+): NextResponse<ApiResponse> {
+  if (e instanceof AppError) return err(e, options);
+  if (e instanceof ZodError) return err(validationErrorFromZod(e), options);
+  console.error("[api] Unhandled error:", e);
+  return internalError("Internal server error", options);
 }
 
 /** Extract a short, stable request id for tracing/logging. */

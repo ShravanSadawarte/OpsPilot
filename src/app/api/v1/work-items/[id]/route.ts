@@ -1,7 +1,8 @@
 "use server";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { withAuth, jsonBody } from "@/lib/api-handler";
+import { AppError, ErrorCode } from "@/lib/http";
 import {
   getWorkItem,
   updateWorkItem,
@@ -15,34 +16,34 @@ const transitionSchema = z.object({
   version: z.number().int().nonnegative(),
 });
 
-export const GET = withAuth(async (_user, req: NextRequest) => {
-  const { searchParams } = new URL(req.url);
-  const workItemId = searchParams.get("workItemId");
-  if (!workItemId) return NextResponse.json({ error: "workItemId required" }, { status: 400 });
-  const result = await getWorkItem(_user, workItemId);
-  return NextResponse.json(result, { status: 200 });
+export const GET = withAuth(async (user, req: NextRequest) => {
+  const workItemId = new URL(req.url).searchParams.get("workItemId");
+  if (!workItemId) {
+    throw new AppError(400, ErrorCode.VALIDATION_ERROR, "workItemId is required.");
+  }
+  return await getWorkItem(user, workItemId);
 });
 
 export const PATCH = withAuth(
   async (user, req: NextRequest) => {
-    const { searchParams } = new URL(req.url);
-    const workItemId = searchParams.get("workItemId");
-    if (!workItemId) return NextResponse.json({ error: "workItemId required" }, { status: 400 });
+    const workItemId = new URL(req.url).searchParams.get("workItemId");
+    if (!workItemId) {
+      throw new AppError(400, ErrorCode.VALIDATION_ERROR, "workItemId is required.");
+    }
     const body = UpdateWorkItemSchema.parse(await jsonBody(req));
-    const result = await updateWorkItem(user, workItemId, body);
-    return NextResponse.json(result, { status: 200 });
+    return await updateWorkItem(user, workItemId, body);
   },
   { csrf: true },
 );
 
 export const POST = withAuth(
   async (user, req: NextRequest) => {
-    const { searchParams } = new URL(req.url);
-    const workItemId = searchParams.get("workItemId");
-    if (!workItemId) return NextResponse.json({ error: "workItemId required" }, { status: 400 });
+    const workItemId = new URL(req.url).searchParams.get("workItemId");
+    if (!workItemId) {
+      throw new AppError(400, ErrorCode.VALIDATION_ERROR, "workItemId is required.");
+    }
     const body = transitionSchema.parse(await jsonBody(req));
-    const result = await transitionWorkItem(user, workItemId, body);
-    return NextResponse.json(result, { status: 200 });
+    return await transitionWorkItem(user, workItemId, body);
   },
   { csrf: true },
 );

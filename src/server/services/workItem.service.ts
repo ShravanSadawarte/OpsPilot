@@ -653,6 +653,46 @@ export async function addComment(
   return ok(comment, { status: 201 });
 }
 
+export async function listComments({
+  user,
+  workItemId,
+  pagination,
+}: {
+  user: AuthedUser;
+  workItemId: string;
+  pagination: { page: number; pageSize: number };
+}) {
+  const item = await db.workItem.findUnique({ where: { id: workItemId } });
+  if (!item) {
+    throw new AppError(404, ErrorCode.NOT_FOUND, "Work item not found.");
+  }
+  const allowed = await canViewWorkItem(user, { teamId: item.teamId });
+  if (!allowed) {
+    throw new AppError(404, ErrorCode.NOT_FOUND, "Work item not found.");
+  }
+
+  const [items, total] = await Promise.all([
+    db.comment.findMany({
+      where: { workItemId },
+      orderBy: { createdAt: "desc" },
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+      include: { author: { select: { id: true, name: true, email: true } } },
+    }),
+    db.comment.count({ where: { workItemId } }),
+  ]);
+
+  return ok({
+    items,
+    meta: {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      total,
+      totalPages: Math.ceil(total / pagination.pageSize),
+    },
+  });
+}
+
 /* ======================================================================== */
 /* Activity                                                                 */
 /* ======================================================================== */

@@ -1,13 +1,15 @@
 "use server";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { withAuth } from "@/lib/api-handler";
+import { AppError, ErrorCode } from "@/lib/http";
 import { teamWorkOverview } from "@/server/services/team.service";
 
 export const GET = withAuth(async (user, req: NextRequest) => {
   const { searchParams } = new URL(req.url);
   const teamId = searchParams.get("teamId");
-  if (!teamId) return NextResponse.json({ error: "teamId required" }, { status: 400 });
-  const result = await teamWorkOverview(user, teamId);
-  return NextResponse.json(result, { status: 200 });
+  if (!teamId) {
+    throw new AppError(400, ErrorCode.VALIDATION_ERROR, "teamId is required.");
+  }
+  return await teamWorkOverview(user, teamId);
 });

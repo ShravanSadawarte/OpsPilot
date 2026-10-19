@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getSession, validateCsrfToken, getCsrfTokenFromCookie } from "@/lib/auth";
-import { AppError, err, internalError, requestId, ErrorCode } from "@/lib/http";
+import { AppError, err, toErrorResponse, requestId, ErrorCode } from "@/lib/http";
 
 export type AuthedUser = {
   id: string;
@@ -54,11 +54,7 @@ export function withAuth(handler: AuthedHandler, options: { csrf?: boolean } = {
         req,
       );
     } catch (e: unknown) {
-      if (e instanceof AppError) return err(e, { requestId: rid });
-      return internalError(
-        (e as Error)?.message ?? "Internal server error",
-        { requestId: rid },
-      );
+      return toErrorResponse(e, { requestId: rid });
     }
   };
 }
