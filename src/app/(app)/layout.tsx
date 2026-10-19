@@ -1,25 +1,19 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { AppShell } from "@/components/layout/app-shell";
 
-import { Sidebar } from "@/components/layout/sidebar";
-import { Topbar } from "@/components/layout/topbar";
-import { useUser } from "@/hooks/use-user";
+export const dynamic = "force-dynamic";
 
-export default function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { user, isLoading } = useUser();
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+  if (!session?.user) redirect("/login");
 
-  if (isLoading || !user) return null;
+  const user = {
+    id: session.user.id,
+    name: session.user.name,
+    email: session.user.email,
+    role: session.user.role,
+  };
 
-  return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar user={user} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar user={user} />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
-      </div>
-    </div>
-  );
+  return <AppShell user={user}>{children}</AppShell>;
 }

@@ -3,89 +3,252 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ClipboardCheck,
   LayoutDashboard,
-  List,
-  FileText,
-  Users,
-  ShieldAlert,
-  Clock,
+  ListChecks,
+  Loader2,
   LogOut,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Users,
+  X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { apiFetch } from "@/lib/api-client";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { roleLabel } from "@/lib/status";
+import { BrandLockup, BrandMark } from "@/components/brand";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { useSignOut } from "@/hooks/use-sign-out";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/work-items", label: "Work Items", icon: List },
-  { href: "/approvals", label: "Approvals", icon: FileText },
+  { href: "/work-items", label: "Work items", icon: ListChecks },
+  { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
   { href: "/teams", label: "Teams", icon: Users },
-];
+] as const;
 
-export function Sidebar({ user }: { user: { name: string | null; email: string; role: string } }) {
+type ShellUser = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+};
+
+type SidebarContentProps = {
+  user: ShellUser;
+  collapsed: boolean;
+  mobile?: boolean;
+  onNavigate?: () => void;
+  onCloseMobile?: () => void;
+  onToggleCollapsed?: () => void;
+};
+
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function SidebarContent({
+  user,
+  collapsed,
+  mobile = false,
+  onNavigate,
+  onCloseMobile,
+  onToggleCollapsed,
+}: SidebarContentProps) {
   const pathname = usePathname();
+  const { signOut, isSigningOut } = useSignOut();
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 border-r border-border bg-background flex flex-col z-20">
-      <div className="h-16 flex items-center gap-3 px-5">
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
-          OP
-        </div>
-        <span className="font-semibold text-lg tracking-tight">OpsPilot</span>
+    <>
+      <div
+        className={cn(
+          "flex h-[68px] shrink-0 items-center border-b border-sidebar-border",
+          collapsed ? "justify-center px-3" : "justify-between px-4",
+        )}
+      >
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+          aria-label="OpsPilot dashboard"
+        >
+          {collapsed ? (
+            <BrandMark />
+          ) : (
+            <BrandLockup
+              textClassName="text-white"
+              subtitle="Operations"
+              className="min-w-0"
+            />
+          )}
+        </Link>
+        {mobile ? (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            autoFocus
+            className="grid size-8 place-items-center rounded-lg text-sidebar-muted transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+            aria-label="Close navigation"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-            >
-              <Icon className="size-5" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav aria-label="Primary" className="flex-1 overflow-y-auto px-2.5 py-4">
+        {!collapsed ? (
+          <p className="px-2.5 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-muted/80">
+            Workspace
+          </p>
+        ) : null}
+        <ul className="space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActivePath(pathname, item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    "relative flex items-center rounded-lg py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                    collapsed ? "justify-center px-0" : "gap-3 px-3",
+                    active
+                      ? "bg-sidebar-active text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                      : "text-sidebar-muted hover:bg-white/[0.05] hover:text-sidebar-foreground",
+                  )}
+                >
+                  {active ? (
+                    <span
+                      className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-primary"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  <Icon
+                    className={cn("size-[18px] shrink-0", active ? "text-white" : "text-sidebar-muted")}
+                    aria-hidden="true"
+                  />
+                  {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
 
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3 px-3 mb-3">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name ?? user.email)}&background=random`} alt="" />
-            <AvatarFallback>
-              {user.name ? user.name[0] : user.email[0]}
-            </AvatarFallback>
-          </Avatar>
-          <div className="hidden sm:flex flex-col">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs text-muted-foreground truncate max-w-[120px]">{user.email}</p>
-            <Badge variant="outline" className="mt-1 text-[10px]">{user.role}</Badge>
-          </div>
-        </div>
-        <Button
-          onClick={() => {
-            apiFetch("/api/v1/auth/logout", { method: "POST" }).then(() => {
-              window.location.href = "/login";
-            });
-          }}
-          variant="destructive"
-          size="sm"
-          className="w-full"
+      <div className="border-t border-sidebar-border p-3">
+        <div
+          className={cn(
+            "flex items-center gap-2.5",
+            collapsed ? "justify-center" : "rounded-lg bg-white/[0.035] px-2.5 py-2",
+          )}
         >
-          <LogOut className="size-4 mr-2" /> Sign out
-        </Button>
+          <UserAvatar name={user.name} email={user.email} size="sm" />
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-white">{user.name ?? user.email}</p>
+              <p className="truncate text-[10px] text-sidebar-muted">{roleLabel(user.role)}</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className={cn("mt-2 flex gap-1", collapsed && "flex-col")}>
+          <button
+            type="button"
+            onClick={signOut}
+            disabled={isSigningOut}
+            title="Sign out"
+            className={cn(
+              "flex h-8 items-center justify-center gap-2 rounded-lg text-[11px] font-medium text-sidebar-muted transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-60",
+              collapsed ? "w-full" : "flex-1 px-2",
+            )}
+          >
+            {isSigningOut ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <LogOut className="size-3.5" aria-hidden="true" />
+            )}
+            {!collapsed ? <span>Sign out</span> : <span className="sr-only">Sign out</span>}
+          </button>
+
+          {onToggleCollapsed ? (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className={cn(
+                "flex h-8 items-center justify-center gap-2 rounded-lg text-[11px] font-medium text-sidebar-muted transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                collapsed ? "w-full" : "flex-1 px-2",
+              )}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-3.5" aria-hidden="true" />
+              ) : (
+                <PanelLeftClose className="size-3.5" aria-hidden="true" />
+              )}
+              {!collapsed ? <span>Collapse</span> : <span className="sr-only">Expand sidebar</span>}
+            </button>
+          ) : null}
+        </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function Sidebar({
+  user,
+  collapsed,
+  mobileOpen,
+  onCloseMobile,
+  onToggleCollapsed,
+}: {
+  user: ShellUser;
+  collapsed: boolean;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
+  onToggleCollapsed: () => void;
+}) {
+  return (
+    <>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out md:flex",
+          collapsed ? "w-[76px]" : "w-[264px]",
+        )}
+        aria-label="Sidebar"
+      >
+        <SidebarContent
+          user={user}
+          collapsed={collapsed}
+          onToggleCollapsed={onToggleCollapsed}
+        />
+      </aside>
+
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+            onClick={onCloseMobile}
+            aria-label="Close navigation"
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+            className="animate-enter absolute inset-y-0 left-0 flex w-[min(320px,86vw)] flex-col border-r border-sidebar-border bg-sidebar shadow-float"
+          >
+            <SidebarContent
+              user={user}
+              collapsed={false}
+              mobile
+              onNavigate={onCloseMobile}
+              onCloseMobile={onCloseMobile}
+            />
+          </aside>
+        </div>
+      ) : null}
+    </>
   );
 }

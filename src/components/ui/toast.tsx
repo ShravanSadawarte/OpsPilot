@@ -1,102 +1,163 @@
 "use client";
 
 import * as React from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export type ToastVariant = "default" | "success" | "destructive" | "warning" | "info";
 
 export type Toast = {
   id: string;
   title?: string;
   description?: string;
-  variant?: "default" | "destructive";
+  variant?: ToastVariant;
   duration?: number;
 };
 
-type ToastAction = {
-  label: string;
-  onClick: () => void;
-};
-
-type ToastState = {
+type ToastContextValue = {
   toasts: Toast[];
-};
-
-const ToastContext = React.createContext<{
-  toasts: Toast[];
-  toast: (props: Omit<Toast, "id">) => void;
+  toast: (props: Omit<Toast, "id">) => string;
   dismiss: (id?: string) => void;
-} | undefined>(undefined);
+};
 
-let count = 0;
+const ToastContext = React.createContext<ToastContextValue | undefined>(undefined);
+
+let toastCount = 0;
 
 function genId() {
-  return (++count).toString();
+  toastCount += 1;
+  return String(toastCount);
 }
 
+const variantConfig: Record<
+  ToastVariant,
+  { icon: LucideIcon; iconClassName: string; accentClassName: string }
+> = {
+  default: {
+    icon: Info,
+    iconClassName: "text-muted-foreground",
+    accentClassName: "bg-border",
+  },
+  success: {
+    icon: CheckCircle2,
+    iconClassName: "text-success",
+    accentClassName: "bg-success",
+  },
+  destructive: {
+    icon: AlertTriangle,
+    iconClassName: "text-destructive",
+    accentClassName: "bg-destructive",
+  },
+  warning: {
+    icon: AlertTriangle,
+    iconClassName: "text-warning",
+    accentClassName: "bg-warning",
+  },
+  info: {
+    icon: Info,
+    iconClassName: "text-info",
+    accentClassName: "bg-info",
+  },
+};
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = React.useState<ToastState>({ toasts: [] });
+  const [toasts, setToasts] = React.useState<Toast[]>([]);
+  const timers = React.useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const dismiss = React.useCallback((id?: string) => {
+    if (id === undefined) {
+      timers.current.forEach((timer) => clearTimeout(timer));
+      timers.current.clear();
+      setToasts([]);
+      return;
+    }
+    const timer = timers.current.get(id);
+    if (timer) clearTimeout(timer);
+    timers.current.delete(id);
+    setToasts((current) => current.filter((item) => item.id !== id));
+  }, []);
 
   const toast = React.useCallback(
     (props: Omit<Toast, "id">) => {
       const id = genId();
-      setState((s) => ({ toasts: [...s.toasts, { ...props, id }] }));
-      const delay = props.duration ?? 4000;
-      const timer = setTimeout(() => {
-        setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-      }, delay);
+      setToasts((current) => [...current.slice(-3), { ...props, id }]);
+      const timer = setTimeout(() => dismiss(id), props.duration ?? 4500);
+      timers.current.set(id, timer);
       return id;
     },
-    [],
+    [dismiss],
   );
 
-  const dismiss = React.useCallback((id?: string) => {
-    setState((s) =>
-      id === undefined ? { toasts: [] } : { toasts: s.toasts.filter((t) => t.id !== id) },
-    );
+  React.useEffect(() => {
+    const activeTimers = timers.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+      activeTimers.clear();
+    };
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toasts: state.toasts, toast, dismiss }}>
+    <ToastContext.Provider value={{ toasts, toast, dismiss }}>
       {children}
+      <ToastViewport />
     </ToastContext.Provider>
   );
 }
 
 export function useToast() {
-  const ctx = React.useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within a ToastProvider");
-  return ctx;
+  const context = React.useContext(ToastContext);
+  if (!context) throw new Error("useToast must be used within a ToastProvider");
+  return context;
 }
 
-export function Toast({ toast }: { toast: Toast }) {
+function ToastCard({ toast }: { toast: Toast }) {
+  const { dismiss } = useToast();
+  const variant = toast.variant ?? "default";
+  const config = variantConfig[variant];
+  const Icon = config.icon;
+
   return (
     <div
-      className={`flex w-full items-center gap-4 p-4 rounded-lg border ${
-        toast.variant === "destructive"
-          ? "border-destructive/50 bg-destructive text-destructive-foreground"
-          : "border-primary bg-background text-foreground"
-      }`}
+      className="toast-item pointer-events-auto relative flex w-full gap-3 overflow-hidden rounded-xl border border-border bg-popover p-3.5 pr-10 text-popover-foreground shadow-float"
+      role={variant === "destructive" ? "alert" : "status"}
+      aria-atomic="true"
     >
-      <div className="flex flex-col gap-1">
-        {toast.title && (
-          <h4 className="font-semibold">{toast.title}</h4>
-        )}
-        {toast.description && <p className="text-sm">{toast.description}</p>}
+      <span className={cn("absolute inset-y-0 left-0 w-0.5", config.accentClassName)} aria-hidden="true" />
+      <Icon className={cn("mt-0.5 size-4 shrink-0", config.iconClassName)} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        {toast.title ? <p className="text-[13px] font-semibold leading-5">{toast.title}</p> : null}
+        {toast.description ? (
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{toast.description}</p>
+        ) : null}
       </div>
+      <button
+        type="button"
+        onClick={() => dismiss(toast.id)}
+        className="absolute right-2 top-2 grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        aria-label="Dismiss notification"
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </button>
     </div>
   );
 }
 
 export function ToastViewport() {
-  const { toasts, dismiss } = useToast();
+  const { toasts } = useToast();
   return (
-    <div className="fixed top-0 right-0 z-50 flex flex-col gap-2 p-4 pointer-events-none">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className="pointer-events-auto"
-          onClick={() => dismiss(t.id)}
-        >
-          <Toast toast={t} />
-        </div>
+    <div
+      className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2 sm:bottom-6 sm:right-6"
+      aria-live="polite"
+      aria-label="Notifications"
+    >
+      {toasts.map((toast) => (
+        <ToastCard key={toast.id} toast={toast} />
       ))}
     </div>
   );

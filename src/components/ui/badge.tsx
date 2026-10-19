@@ -1,30 +1,36 @@
-"use client";
-
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { cva, type VariantProps } from "class-variance-authority";
 
-interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "default" | "secondary" | "destructive" | "outline";
-}
+const badgeVariants = cva(
+  "inline-flex h-5.5 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium leading-none",
+  {
+    variants: {
+      variant: {
+        default: "border-primary/20 bg-primary/10 text-primary",
+        secondary: "border-transparent bg-secondary text-secondary-foreground",
+        destructive: "border-destructive/20 bg-destructive/10 text-destructive",
+        success: "border-success/20 bg-success/10 text-success",
+        warning: "border-warning/20 bg-warning/10 text-warning",
+        info: "border-info/20 bg-info/10 text-info",
+        outline: "border-border bg-transparent text-muted-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
 
-const badgeVariants = (props: { variant?: BadgeProps["variant"] }) => {
-  const { variant = "default" } = props;
-  return cn(
-    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-    variant === "default"
-      && "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-    variant === "secondary"
-      && "border-secondary bg-secondary text-secondary-foreground hover:bg-secondary/80",
-    variant === "destructive"
-      && "border-destructive text-destructive-foreground hover:bg-destructive/80",
-    variant === "outline"
-      && "border-input bg-background hover:bg-accent hover:text-accent-foreground",
-  );
-};
+interface BadgeProps
+  extends React.HTMLAttributes<HTMLSpanElement>,
+    VariantProps<typeof badgeVariants> {}
 
-const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(({ className, variant, ...props }, ref) => (
-  <span ref={ref} className={cn(badgeVariants({ variant }), className)} {...props} />
-));
+const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => (
+    <span ref={ref} className={cn(badgeVariants({ variant }), className)} {...props} />
+  ),
+);
 Badge.displayName = "Badge";
 
 export { Badge, badgeVariants };
