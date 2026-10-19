@@ -210,26 +210,25 @@ optimized `.next` output for Vercel.
 
 ## Vercel deployment
 
+Full step-by-step instructions, the complete environment-variable list, and
+migration steps are in **VERCEL_DEPLOYMENT.md**.
+
+Quick summary:
 1. Push the repository to GitHub.
 2. In Vercel, "Add New Project" and import the repository.
-3. Framework preset: Next.js (auto-detected). Build command: `npm run build`.
-   Install command: `npm install`.
-4. Add the environment variables from `.env.example` (excluding `.env` itself)
-   to the Vercel project settings. Set `SESSION_COOKIE_SECURE=true` and
-   `NODE_ENV=production`.
-5. Set `DATABASE_URL` to the pooled production connection string and
-   `DATABASE_URL_DIRECT` to the direct production connection string.
+3. Framework preset: Next.js. Build command: `npm run build`.
+4. Add the environment variables from `.env.example` to Vercel Project Settings
+   > Environment Variables (Production). Set `NODE_ENV=production` and
+   `SESSION_COOKIE_SECURE=true`.
+5. Set `DATABASE_URL` (pooled) and `DATABASE_URL_DIRECT` (direct/migration).
 6. Before the first deploy, run migrations against production:
-
-```bash
-# Run locally against the production direct URL (or via your CI release step)
-DATABASE_URL_DIRECT="<production direct URL>" npm run db:migrate:deploy
-```
-
-7. Deploy. Verify https://<your-app>.vercel.app/login and core flows
-   (sign in, dashboard, create work item, transition, approval).
+   `DATABASE_URL_DIRECT="<production direct URL>" npm run db:migrate:deploy`
+7. Deploy and verify `https://<your-app>.vercel.app/login` plus core flows.
 
 ## API documentation
+
+Versioned REST API under `/api/v1`. See `docs/API.md` for the OpenAPI-style
+reference of implemented endpoints, request/response shapes, and error codes.
 
 Versioned REST API under `/api/v1`. See `docs/API.md` for the OpenAPI-style
 reference of implemented endpoints, request/response shapes, and error codes.
