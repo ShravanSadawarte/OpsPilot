@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Ref } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -43,13 +44,13 @@ function breadcrumbsFor(pathname: string): Crumb[] {
     return [workspace, { label: "Work items" }];
   }
   if (pathname === "/work-items/create") {
-    return [workspace, { label: "Work items", href: "/work-items" }, { label: "New item" }];
+    return [workspace, { label: "Work items", href: "/work-items" }, { label: "New work item" }];
   }
   if (pathname.startsWith("/work-items/")) {
     if (pathname.endsWith("/edit")) {
-      return [workspace, { label: "Work items", href: "/work-items" }, { label: "Edit item" }];
+      return [workspace, { label: "Work items", href: "/work-items" }, { label: "Edit work item" }];
     }
-    return [workspace, { label: "Work items", href: "/work-items" }, { label: "Item details" }];
+    return [workspace, { label: "Work items", href: "/work-items" }, { label: "Work item details" }];
   }
   if (pathname === "/approvals") {
     return [workspace, { label: "Approvals" }];
@@ -62,7 +63,17 @@ function breadcrumbsFor(pathname: string): Crumb[] {
   return [workspace, { label: last.replaceAll("-", " ") }];
 }
 
-export function Topbar({ user, onOpenMobile }: { user: ShellUser; onOpenMobile: () => void }) {
+export function Topbar({
+  user,
+  mobileOpen,
+  onOpenMobile,
+  menuButtonRef,
+}: {
+  user: ShellUser;
+  mobileOpen: boolean;
+  onOpenMobile: () => void;
+  menuButtonRef?: Ref<HTMLButtonElement>;
+}) {
   const pathname = usePathname();
   const { signOut, isSigningOut } = useSignOut();
   const crumbs = breadcrumbsFor(pathname);
@@ -71,15 +82,18 @@ export function Topbar({ user, onOpenMobile }: { user: ShellUser; onOpenMobile: 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border/80 bg-background/85 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 sm:px-6 lg:px-8">
       <button
+        ref={menuButtonRef}
         type="button"
         onClick={onOpenMobile}
+        aria-expanded={mobileOpen}
+        aria-controls="mobile-navigation"
         className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 md:hidden"
         aria-label="Open navigation"
       >
         <Menu className="size-5" aria-hidden="true" />
       </button>
 
-      <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 sm:flex">
+      <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 lg:flex">
         {crumbs.map((crumb, index) => {
           const last = index === crumbs.length - 1;
           return (
@@ -110,7 +124,7 @@ export function Topbar({ user, onOpenMobile }: { user: ShellUser; onOpenMobile: 
         })}
       </nav>
 
-      <span className="min-w-0 truncate text-[13px] font-medium text-foreground sm:hidden">
+      <span className="min-w-0 truncate text-[13px] font-medium text-foreground lg:hidden">
         {current?.label ?? "OpsPilot"}
       </span>
 

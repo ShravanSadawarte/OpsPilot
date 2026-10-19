@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -79,7 +79,6 @@ export function WorkItemsView({
   currentUserId: string;
   teams: TeamOption[];
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -99,11 +98,15 @@ export function WorkItemsView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchDraft, setSearchDraft] = useState(search);
+  const [lastUrlSearch, setLastUrlSearch] = useState(search);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
+  // Keep the draft in step with browser back/forward or a shared URL, without
+  // clobbering what the user is typing during the debounce window.
+  if (search !== lastUrlSearch) {
+    setLastUrlSearch(search);
     setSearchDraft(search);
-  }, [search]);
+  }
 
   const updateParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -113,9 +116,11 @@ export function WorkItemsView({
         else next.set(key, value);
       }
       const query = next.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      // Shallow URL update: this list is client-fetched, so a router navigation
+      // would add a needless RSC/server round-trip for every keystroke.
+      window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
     },
-    [pathname, router, searchParams],
+    [pathname, searchParams],
   );
 
   useEffect(() => {
@@ -314,7 +319,7 @@ export function WorkItemsView({
               </div>
             </div>
 
-            <div className="mt-2.5 grid grid-cols-2 gap-2 md:grid-cols-5">
+            <div className="mt-2.5 grid grid-cols-2 gap-2 xl:grid-cols-5">
               <label className="sr-only" htmlFor="filter-status">
                 Filter by status
               </label>
@@ -391,17 +396,19 @@ export function WorkItemsView({
               <label className="sr-only" htmlFor="sort-work-items">
                 Sort work items
               </label>
-              <Select
-                id="sort-work-items"
-                value={sortValue}
-                onChange={(event) => changeSort(event.target.value)}
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
+              <div className="col-span-2 xl:col-span-1">
+                <Select
+                  id="sort-work-items"
+                  value={sortValue}
+                  onChange={(event) => changeSort(event.target.value)}
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -469,7 +476,7 @@ export function WorkItemsView({
               </div>
 
               <Card className="overflow-hidden">
-                <div className="hidden md:block" aria-busy={loading}>
+                <div className="hidden xl:block" aria-busy={loading}>
                   <Table>
                     <TableCaption className="sr-only">
                       Work items, page {data.meta.page} of {Math.max(1, data.meta.totalPages)}
@@ -564,7 +571,7 @@ export function WorkItemsView({
                   </Table>
                 </div>
 
-                <div className="divide-y divide-border/70 md:hidden" aria-busy={loading}>
+                <div className="divide-y divide-border/70 xl:hidden" aria-busy={loading}>
                   {data.items.map((item) => {
                     const overdueItem = isOverdueStatus(item.dueDate, item.status);
                     return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -48,16 +48,23 @@ type Decision = {
 export function ApprovalQueue({ initialApprovals }: { initialApprovals: ApprovalQueueItem[] }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [approvals, setApprovals] = useState(initialApprovals);
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [decision, setDecision] = useState<Decision | null>(null);
   const [reason, setReason] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setApprovals(initialApprovals);
-  }, [initialApprovals]);
+  const approvals = useMemo(
+    () => initialApprovals.filter((approval) => !removedIds.includes(approval.id)),
+    [initialApprovals, removedIds],
+  );
+
+  function markRemoved(approvalId: string) {
+    setRemovedIds((current) =>
+      current.includes(approvalId) ? current : [...current, approvalId],
+    );
+  }
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -112,9 +119,7 @@ export function ApprovalQueue({ initialApprovals }: { initialApprovals: Approval
       if (!response.ok) {
         const parsed = await readApiError(response, "Unable to record your decision.");
         if (parsed.code === "CONFLICT") {
-          setApprovals((current) =>
-            current.filter((approval) => approval.id !== decision.approval.id),
-          );
+          markRemoved(decision.approval.id);
           setDecision(null);
           toast({
             variant: "warning",
@@ -128,9 +133,7 @@ export function ApprovalQueue({ initialApprovals }: { initialApprovals: Approval
         return;
       }
 
-      setApprovals((current) =>
-        current.filter((approval) => approval.id !== decision.approval.id),
-      );
+      markRemoved(decision.approval.id);
       toast({
         variant: "success",
         title: decision.mode === "APPROVED" ? "Approval approved" : "Approval rejected",
@@ -231,7 +234,7 @@ export function ApprovalQueue({ initialApprovals }: { initialApprovals: Approval
                         title={formatDateTime(approval.createdAt)}
                         suppressHydrationWarning
                       >
-                        Waiting {formatRelativeTime(approval.createdAt)}
+                        Requested {formatRelativeTime(approval.createdAt)}
                       </time>
                     </span>
                   </div>

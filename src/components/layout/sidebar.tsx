@@ -231,9 +231,11 @@ export function Sidebar({
             type="button"
             className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
             onClick={onCloseMobile}
+            tabIndex={-1}
             aria-label="Close navigation"
           />
           <aside
+            id="mobile-navigation"
             role="dialog"
             aria-modal="true"
             aria-label="Navigation"

@@ -268,15 +268,11 @@ export default async function WorkItemDetailPage({
                 <DetailRow label="Due date">
                   <span
                     className={cn(isOverdue ? "font-medium text-destructive" : "text-foreground")}
+                    title={item.dueDate ? formatDateTime(item.dueDate) : undefined}
                   >
                     {formatDueDate(item.dueDate)}
                   </span>
                 </DetailRow>
-                {item.dueDate ? (
-                  <DetailRow label="Due on">
-                    <span className="text-muted-foreground">{formatDate(item.dueDate)}</span>
-                  </DetailRow>
-                ) : null}
                 <DetailRow label="Team">
                   <span>
                     {item.team.key} · {item.team.name}

@@ -40,7 +40,6 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 
 type TeamOption = { id: string; key: string; name: string };
 
@@ -490,7 +489,7 @@ export function CreateWorkItemForm({ teams }: { teams: TeamOption[] }) {
                   title: "Activity is recorded",
                   description: "Creation is written to the audit trail in the same transaction.",
                 },
-              ].map((step, index) => {
+              ].map((step) => {
                 const Icon = step.icon;
                 return (
                   <div key={step.title} className="flex gap-3">

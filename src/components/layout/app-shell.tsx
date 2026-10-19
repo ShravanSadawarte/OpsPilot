@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -22,9 +21,10 @@ export function AppShell({
   user: ShellUser;
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const wasMobileOpen = useRef(false);
 
   useEffect(() => {
     try {
@@ -35,13 +35,34 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     if (!mobileOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileOpen(false);
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const drawer = document.getElementById("mobile-navigation");
+      if (!drawer) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (!drawer.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
@@ -50,6 +71,13 @@ export function AppShell({
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (wasMobileOpen.current && !mobileOpen) {
+      menuButtonRef.current?.focus();
+    }
+    wasMobileOpen.current = mobileOpen;
   }, [mobileOpen]);
 
   function toggleCollapsed() {
@@ -84,7 +112,12 @@ export function AppShell({
           collapsed ? "md:pl-[76px]" : "md:pl-[264px]",
         )}
       >
-        <Topbar user={user} onOpenMobile={() => setMobileOpen(true)} />
+        <Topbar
+          user={user}
+          mobileOpen={mobileOpen}
+          onOpenMobile={() => setMobileOpen(true)}
+          menuButtonRef={menuButtonRef}
+        />
         <main
           id="main-content"
           tabIndex={-1}

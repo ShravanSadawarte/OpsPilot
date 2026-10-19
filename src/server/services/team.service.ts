@@ -54,8 +54,8 @@ export async function getTeam(user: AuthedUser, teamId: string) {
     include: {
       memberships: {
         where: { isActive: true },
-        include: { user: { select: { id: true, name: true, email: true, role: true } } },
-        orderBy: { role: "asc", createdAt: "asc" },
+        include: { user: { select: { id: true, name: true, email: true, role: true, isActive: true } } },
+        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
       },
       _count: { select: { workItems: true, memberships: { where: { isActive: true } } } },
     },

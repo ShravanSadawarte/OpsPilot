@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -52,7 +52,7 @@ export type DirectoryTeam = {
 
 type TeamMember = {
   id: string;
-  user: { id: string; name: string | null; email: string; role: string };
+  user: { id: string; name: string | null; email: string; role: string; isActive: boolean };
   role: string;
 };
 
@@ -132,21 +132,28 @@ export function TeamDirectory({
     }
   }, []);
 
-  useEffect(() => {
-    if (!activeTeam) {
+  const openTeam = useCallback(
+    (team: DirectoryTeam) => {
+      setActiveTeam(team);
       setDetail(null);
       setDetailError(null);
       setRemoving(null);
       setAddOpen(false);
-      return;
-    }
+      setAddUserId("");
+      setAddRole("TEAM_MEMBER");
+      setAddError(null);
+      void loadDetail(team.id);
+    },
+    [loadDetail],
+  );
+
+  function closeTeam() {
+    setActiveTeam(null);
+    setDetail(null);
+    setDetailError(null);
     setRemoving(null);
     setAddOpen(false);
-    setAddUserId("");
-    setAddRole("TEAM_MEMBER");
-    setAddError(null);
-    void loadDetail(activeTeam.id);
-  }, [activeTeam, loadDetail]);
+  }
 
   const loadUsers = useCallback(
     async (force = false) => {
@@ -452,7 +459,7 @@ export function TeamDirectory({
                   </Link>
                 </Button>
                 {team.canManage || team.isMember ? (
-                  <Button size="sm" variant="ghost" onClick={() => setActiveTeam(team)}>
+                  <Button size="sm" variant="ghost" onClick={() => openTeam(team)}>
                     <Users className="size-3.5" aria-hidden="true" />
                     Members
                   </Button>
@@ -466,7 +473,7 @@ export function TeamDirectory({
       <Dialog
         open={Boolean(activeTeam)}
         onOpenChange={(open) => {
-          if (!open) setActiveTeam(null);
+          if (!open) closeTeam();
         }}
       >
         <DialogContent className="max-w-xl">
@@ -478,7 +485,7 @@ export function TeamDirectory({
                   {activeTeam.name}
                 </DialogTitle>
                 <DialogDescription>
-                  {activeTeam.memberCount} {pluralize(activeTeam.memberCount, "active member")} ·{" "}
+                  {activeTeam.memberCount} {pluralize(activeTeam.memberCount, "member")} ·{" "}
                   {activeTeam.workItemCount} {pluralize(activeTeam.workItemCount, "work item")}
                 </DialogDescription>
               </DialogHeader>
@@ -537,6 +544,14 @@ export function TeamDirectory({
                         <Badge variant="outline" className="shrink-0 text-[10px]">
                           {humanizeEnum(member.role)}
                         </Badge>
+                        {!member.user.isActive ? (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-warning/30 bg-warning/10 text-[10px] text-warning"
+                          >
+                            Inactive
+                          </Badge>
+                        ) : null}
                         {activeTeam.canManage && member.user.id !== currentUserId ? (
                           removing === member.user.id ? (
                             <span className="flex shrink-0 items-center gap-1.5">

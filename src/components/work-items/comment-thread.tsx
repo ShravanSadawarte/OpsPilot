@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2, MessageSquare, Send } from "lucide-react";
 import type { Comment } from "@/types/api";
@@ -31,14 +31,18 @@ export function CommentThread({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [comments, setComments] = useState<Comment[]>(() => chronological(initialComments));
+  const [posted, setPosted] = useState<Comment[]>([]);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setComments(chronological(initialComments));
-  }, [initialComments]);
+  const comments = useMemo(() => {
+    const serverIds = new Set(initialComments.map((comment) => comment.id));
+    return chronological([
+      ...initialComments,
+      ...posted.filter((comment) => !serverIds.has(comment.id)),
+    ]);
+  }, [initialComments, posted]);
 
   async function submitComment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,7 +73,7 @@ export function CommentThread({
 
       const payload = (await response.json()) as { data?: Comment };
       if (payload.data) {
-        setComments((current) => chronological([...current, payload.data as Comment]));
+        setPosted((current) => [...current, payload.data as Comment]);
       }
       setBody("");
       toast({ variant: "success", title: "Comment posted" });
@@ -174,7 +178,7 @@ export function CommentThread({
       </form>
 
       <p className="sr-only" aria-live="polite">
-        {total + (comments.length > total ? 1 : 0)} comments
+        {Math.max(total, comments.length)} comments
       </p>
     </div>
   );

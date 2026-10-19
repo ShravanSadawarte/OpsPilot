@@ -36,8 +36,6 @@ import {
   pluralize,
 } from "@/lib/format";
 import {
-  isKnownStatus,
-  priorityLabel,
   STATUS_LABELS,
   WORK_ITEM_STATUSES,
   type WorkItemStatus,
@@ -117,7 +115,9 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow={
           <>
-            <span>{formatLongDate(new Date())}</span>
+            <span>
+              {formatLongDate(new Date())} <span className="opacity-70">UTC</span>
+            </span>
             <span className="size-1 rounded-full bg-border" aria-hidden="true" />
             <span>
               {data.teamCount} {pluralize(data.teamCount, "team")} in scope
@@ -171,7 +171,7 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <section aria-label="Key metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
           label="Open work"
           value={data.openWork}
@@ -454,10 +454,10 @@ function MetricCard({
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-xl border border-border bg-card p-5 shadow-card transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-float focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="group flex flex-col rounded-xl border border-border bg-card p-4 shadow-card transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-float focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-5"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className={cn("grid size-9 place-items-center rounded-lg border", accentStyles[accent])}>
+        <span className={cn("grid size-8 place-items-center rounded-lg border sm:size-9", accentStyles[accent])}>
           <Icon className="size-4" aria-hidden="true" />
         </span>
         <ArrowUpRight
@@ -465,12 +465,14 @@ function MetricCard({
           aria-hidden="true"
         />
       </div>
-      <div className="mt-5">
-        <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
-        <p className="mt-1 text-[30px] font-semibold leading-none tracking-[-0.04em] tabular-nums">
+      <div className="mt-4 sm:mt-5">
+        <p className="text-xs font-medium text-muted-foreground sm:text-[13px]">{label}</p>
+        <p className="mt-1 text-[26px] font-semibold leading-none tracking-[-0.04em] tabular-nums sm:text-[30px]">
           {formatNumber(value)}
         </p>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground sm:text-[11px] sm:leading-relaxed">
+          {detail}
+        </p>
       </div>
     </Link>
   );

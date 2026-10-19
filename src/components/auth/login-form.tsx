@@ -193,7 +193,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
               Choose a role to fill the form. Password: <span className="font-mono">password123</span>
             </p>
           </div>
-          <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             Safe to explore
           </span>
         </div>
