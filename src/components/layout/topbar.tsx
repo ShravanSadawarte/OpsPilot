@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +47,7 @@ export function Topbar({ user }: { user: { name: string | null; email: string; r
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
-                fetch("/api/v1/auth/logout", { method: "POST" }).then(() => {
+                apiFetch("/api/v1/auth/logout", { method: "POST" }).then(() => {
                   window.location.href = "/login";
                 });
               }}

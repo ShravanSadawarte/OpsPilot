@@ -87,7 +87,7 @@ commit these to the repository.
 | `DATABASE_URL_DIRECT` | Yes | Direct Neon/Supabase URL | Used by `prisma migrate deploy`. No `NEXT_PUBLIC_` prefix. |
 | `APP_URL` | Yes | `https://<your-app>.vercel.app` | Public application URL. |
 | `NODE_ENV` | Yes | `production` | Enables secure cookie settings and production logging. |
-| `AUTH_SECRET` | Yes | Output from `openssl rand -base64 32` | Session signing secret. |
+| `AUTH_SECRET` | Yes | Output from `openssl rand -base64 32` | Signs CSRF tokens at runtime; not required at build time. |
 | `SESSION_TTL_SECONDS` | No | `86400` | Session lifetime in seconds (1 day). |
 | `SESSION_COOKIE_SAMESITE` | No | `lax` | `lax` \| `strict` \| `none`. |
 | `SESSION_COOKIE_SECURE` | Yes | `true` | Must be `true` on Vercel (HTTPS only). |
@@ -176,7 +176,7 @@ DATABASE_URL_DIRECT="<staging direct URL>" NODE_ENV=development npm run db:seed
 | `DATABASE_URL_DIRECT` | `postgresql://...` | Yes | Direct connection for `prisma migrate deploy` / seed. |
 | `APP_URL` | `https://ops-pilot.vercel.app` | Yes | Public application URL. |
 | `NODE_ENV` | `production` | Yes | Production mode (secure cookies, prod logging). |
-| `AUTH_SECRET` | `<32+ chars base64>` | Yes | Session cookie signing secret. |
+| `AUTH_SECRET` | `<32+ chars base64>` | Yes | CSRF token signing secret (runtime; build works without it). |
 | `SESSION_TTL_SECONDS` | `86400` | No | Session lifetime (default 1 day). |
 | `SESSION_COOKIE_SAMESITE` | `lax` | No | Cookie SameSite mode. |
 | `SESSION_COOKIE_SECURE` | `true` | Yes | Must be `true` on Vercel (HTTPS). |
@@ -193,18 +193,18 @@ DATABASE_URL_DIRECT="<staging direct URL>" NODE_ENV=development npm run db:seed
 
 | Issue | Likely cause | Fix |
 |---|---|---|
-| Build fails at TypeScript | Missing env at build time | Add all required env vars in Vercel and redeploy. |
+| Build fails at TypeScript | Genuine type error (runtime secrets are not required at build) | Fix the reported type error; `AUTH_SECRET`/`DATABASE_URL` are runtime-only. |
 | 500 on `/api/v1/users/me` | `DATABASE_URL` missing or wrong | Verify pooled URL in Vercel env vars. |
 | Session cookie not set | `SESSION_COOKIE_SECURE` mismatch | On Vercel (HTTPS), set `SESSION_COOKIE_SECURE=true`. |
 | Login rate limit too strict | `LOGIN_RATE_LIMIT_MAX` too low | Increase in Vercel env vars. |
 | Prisma migrate deploy fails | Wrong `DATABASE_URL_DIRECT` | Use the direct (non-pooled) URL. |
-| 401 on all API routes | `AUTH_SECRET` missing | Set `AUTH_SECRET` in Vercel env vars. |
+| 403 on all mutating API routes | `AUTH_SECRET` missing or changed | Set/align `AUTH_SECRET` in Vercel env vars, then reload the page to refresh the CSRF cookie. |
 
 ---
 
 ## Files relevant to deployment
 
-- `vercel.json` — function memory/timeout config (no routes required for standard Next.js).
+- `vercel.json` — function timeout config (no routes required for standard Next.js).
 - `.env.example` — full variable reference (copy locally, add to Vercel dashboard).
 - `prisma/schema.prisma` — data model.
 - `prisma/migrations/0001_init/migration.sql` — initial schema.

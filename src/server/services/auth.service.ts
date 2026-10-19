@@ -1,18 +1,18 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { AppError, ErrorCode, ok } from "@/lib/http";
 import {
   requireUser,
   verifyPassword,
   createSession,
+  revokeSession,
   setSessionCookie,
   clearSessionCookie,
   setCsrfCookie,
-  getCsrfTokenFromCookie,
-  validateCsrfToken,
+  clearCsrfCookie,
+  generateCsrfToken,
   checkLoginRateLimit,
   clearLoginRateLimit,
   SESSION_COOKIE_NAME,
@@ -69,8 +69,8 @@ export async function login(
   const { token } = await createSession(user.id);
   await setSessionCookie(token);
 
-  // Issue a fresh CSRF token cookie for the authenticated session.
-  const csrfToken = randomBytes(16).toString("hex");
+  // Issue a fresh signed CSRF token cookie for the authenticated session.
+  const csrfToken = generateCsrfToken();
   await setCsrfCookie(csrfToken);
 
   return ok({
@@ -88,13 +88,11 @@ export async function logout() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (token) {
-    try {
-      await db.session.delete({ where: { token: token } });
-    } catch {
-      // ignore
-    }
+    // revokeSession hashes the token before deleting; sessions are stored hashed.
+    await revokeSession(token);
   }
   await clearSessionCookie();
+  await clearCsrfCookie();
   return ok({ ok: true });
 }
 
@@ -111,11 +109,8 @@ export async function me() {
 }
 
 export async function csrfToken() {
-  const cookieToken = await getCsrfTokenFromCookie();
-  if (!cookieToken) {
-    const token = randomBytes(16).toString("hex");
-    await setCsrfCookie(token);
-    return ok({ csrfToken: token });
-  }
-  return ok({ csrfToken: cookieToken });
+  // Always issue a fresh signed token so stale/legacy cookies are replaced.
+  const token = generateCsrfToken();
+  await setCsrfCookie(token);
+  return ok({ csrfToken: token });
 }

@@ -78,7 +78,8 @@ cp .env.example .env
 
 Edit `.env` and set `DATABASE_URL` (pooled runtime URL) and
 `DATABASE_URL_DIRECT` (direct/migration URL), plus `AUTH_SECRET`
-(generate with `openssl rand -base64 32`).
+(generate with `openssl rand -base64 32`). `AUTH_SECRET` is used at runtime
+to sign CSRF tokens; it is intentionally **not** required at build time.
 
 3. Apply Prisma migrations:
 
@@ -114,7 +115,7 @@ See `.env.example` for the full list. Key variables:
 | `DATABASE_URL_DIRECT` | Direct connection for migrations/seed. Never `NEXT_PUBLIC_`. |
 | `APP_URL` | Public application URL. |
 | `NODE_ENV` | `development` or `production`. |
-| `AUTH_SECRET` | Session signing secret (`openssl rand -base64 32`). |
+| `AUTH_SECRET` | CSRF token signing secret (`openssl rand -base64 32`); runtime only. |
 | `SESSION_TTL_SECONDS` | Session lifetime (default 86400 = 1 day). |
 | `SESSION_COOKIE_SECURE` | `true` in production (HTTPS only). |
 | `SESSION_COOKIE_SAMESITE` | `lax` (default). |
@@ -240,13 +241,14 @@ reference of implemented endpoints, request/response shapes, and error codes.
 - Session tokens are stored as SHA-256 hashes; raw tokens exist only in
   HttpOnly cookies.
 - Session expiration and revocation are validated on every request.
-- Mutating endpoints require a double-submit CSRF token (`X-CSRF-Token`
-  header matching the `ops_csrf` cookie).
+- Mutating endpoints require a signed double-submit CSRF token
+  (`X-CSRF-Token` header matching the `ops_csrf` cookie; HMAC-SHA256 with
+  `AUTH_SECRET`).
 - Login is rate-limited per identifier (email or IP).
 - No secrets or database URLs are exposed to the client bundle
   (no `NEXT_PUBLIC_` database/secrets).
-- Authorization is revalidated at the server boundary; middleware only
-  performs early navigation redirects.
+- Authorization is revalidated at the server boundary; the proxy
+  (`src/proxy.ts`) only performs early navigation redirects.
 - See `docs/SECURITY.md` for the resource-disclosure policy and threat model.
 
 See `ENGINEERING_DECISIONS.md` for design trade-offs and

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { argon2id, hash, verify } from "argon2";
-import { createHash, randomBytes } from "crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { UserRole } from "@prisma/client";
 import { db } from "./db";
 import { AppError, ErrorCode } from "./http";
@@ -9,15 +9,31 @@ const TOKEN_BYTES = 32;
 const CSRF_COOKIE_NAME = "ops_csrf";
 const SESSION_COOKIE_NAME = "ops_session";
 
-function requiredEnv(key: string): string {
-  const value = process.env[key];
+let cachedAuthSecret: string | undefined;
+
+/**
+ * Resolve AUTH_SECRET lazily.
+ *
+ * This is deliberately not evaluated at module load: Next.js imports route
+ * modules during `next build` to collect their configuration, and build
+ * environments must not be required to expose runtime-only secrets. The
+ * variable is validated the first time a crypto operation actually needs it.
+ */
+export function getAuthSecret(): string {
+  if (cachedAuthSecret) return cachedAuthSecret;
+  const value = process.env.AUTH_SECRET;
   if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
+    throw new Error(
+      "Missing required environment variable: AUTH_SECRET. Configure it in Vercel Project Settings -> Environment Variables for Production (and Preview if used).",
+    );
   }
-  return value;
+  if (value.length < 32) {
+    throw new Error("AUTH_SECRET must be at least 32 characters long.");
+  }
+  cachedAuthSecret = value;
+  return cachedAuthSecret;
 }
 
-export const AUTH_SECRET = requiredEnv("AUTH_SECRET");
 export const SESSION_TTL_SECONDS = parseInt(
   process.env.SESSION_TTL_SECONDS ?? "86400",
   10,
@@ -180,9 +196,38 @@ export async function getCsrfTokenFromCookie(): Promise<string | null> {
   return cookieStore.get(CSRF_COOKIE_NAME)?.value ?? null;
 }
 
+/** Clear the CSRF cookie (on logout). */
+export async function clearCsrfCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(CSRF_COOKIE_NAME, "", {
+    httpOnly: false,
+    secure: SESSION_COOKIE_SECURE,
+    sameSite: SESSION_COOKIE_SAMESITE,
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+function signCsrfToken(token: string): string {
+  return createHmac("sha256", getAuthSecret()).update(token).digest("hex");
+}
+
+/** Generate a random CSRF token with an HMAC signature bound to AUTH_SECRET. */
+export function generateCsrfToken(): string {
+  const token = randomBytes(16).toString("hex");
+  return `${token}.${signCsrfToken(token)}`;
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a, "utf8");
+  const right = Buffer.from(b, "utf8");
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
 /**
- * Verify a double-submit CSRF token. The caller must pass the token read from
- * the X-CSRF-Token header and compare it against the cookie value.
+ * Verify a signed double-submit CSRF token. The caller must pass the token
+ * read from the X-CSRF-Token header and compare it against the cookie value.
  */
 export function validateCsrfToken(
   headerToken: string | null,
@@ -191,18 +236,18 @@ export function validateCsrfToken(
   if (!headerToken || !cookieToken) {
     throw new AppError(403, ErrorCode.FORBIDDEN, "CSRF token missing.");
   }
-  if (!timingSafeEqual(headerToken, cookieToken)) {
+  if (!safeEqual(headerToken, cookieToken)) {
     throw new AppError(403, ErrorCode.FORBIDDEN, "Invalid CSRF token.");
   }
-}
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  const [token, signature] = headerToken.split(".");
+  if (!token || !signature) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, "Invalid CSRF token.");
   }
-  return result === 0;
+  const expected = signCsrfToken(token);
+  if (!safeEqual(signature, expected)) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, "Invalid CSRF token.");
+  }
 }
 
 /* ------------------------------------------------------------------ */

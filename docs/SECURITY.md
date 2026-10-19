@@ -66,7 +66,7 @@ not only in middleware or hidden UI controls.
 |---|---|
 | Credential stuffing / brute force | Login rate limiting (429) + Argon2id hashing |
 | Session theft | HttpOnly cookies + short TTL + revocation |
-| CSRF on cookie mutations | Double-submit `X-CSRF-Token` |
+| CSRF on cookie mutations | Signed double-submit `X-CSRF-Token` (HMAC-SHA256, `AUTH_SECRET`) |
 | Privilege escalation | Server-side `can*` revalidation on every mutation |
 | Cross-team data leakage | Team-scoped queries + 404 non-disclosure |
 | Stale overwrites (lost updates) | Optimistic concurrency (`version` + conditional update) → 409 |
@@ -80,8 +80,11 @@ not only in middleware or hidden UI controls.
 - Provide `DATABASE_URL` (pooled) and `DATABASE_URL_DIRECT` (direct) via
   Vercel environment variables, never in the repo.
 - Run migrations as an explicit release step (`prisma migrate deploy`).
-- Rotate `AUTH_SECRET` if a session secret is compromised (invalidates all
-  sessions).
+- `AUTH_SECRET` is validated lazily: missing values fail at runtime with a
+  clear error instead of breaking `next build`. Rotate it if compromised;
+  this invalidates outstanding CSRF tokens (sessions are revoked separately).
+- Sessions are random 256-bit tokens stored as SHA-256 hashes; `AUTH_SECRET`
+  does not protect session tokens and rotating it does not invalidate them.
 
 ## Limitations
 

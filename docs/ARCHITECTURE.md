@@ -34,7 +34,7 @@ src/
     (auth)/layout.tsx      # auth layout
     layout.tsx             # root layout (ToastProvider, fonts)
     globals.css
-    middleware.ts          # early navigation redirects + cache headers
+    proxy.ts               # early navigation redirects + cache headers (Next.js 16)
     api/
       v1/
         auth/              # login, logout, me, csrf
@@ -115,8 +115,9 @@ and version-compatibility risk of integrating Auth.js with Next.js 16/React 19.
 ### Authorization
 Global roles (ADMIN, MANAGER, MEMBER, TEAM_LEAD, TEAM_MEMBER) combine with
 team-specific membership roles. Centralized `can*` functions are invoked by the
-domain service layer at the server boundary — not only in middleware or UI.
-Middleware performs early navigation redirects only.
+domain service layer at the server boundary — not only in the proxy or UI.
+The proxy (`src/proxy.ts`, formerly `middleware.ts`) performs early navigation
+redirects only.
 
 ### Data model
 Users, Sessions, Teams, TeamMemberships (unique per team/user), WorkItems

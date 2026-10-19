@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
@@ -74,7 +75,7 @@ export function Sidebar({ user }: { user: { name: string | null; email: string; 
         </div>
         <Button
           onClick={() => {
-            fetch("/api/v1/auth/logout", { method: "POST" }).then(() => {
+            apiFetch("/api/v1/auth/logout", { method: "POST" }).then(() => {
               window.location.href = "/login";
             });
           }}

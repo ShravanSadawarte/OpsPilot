@@ -39,9 +39,10 @@ UI mutation genuinely benefits.
 ### Limitations
 - Route Handlers are serverless functions; long-running requests or large
   payloads must be kept within reasonable limits.
-- The Next.js `middleware` convention is deprecated in favor of `proxy` in
-  newer versions; middleware here is used only for early navigation redirects
-  and cache headers, not authorization.
+- `src/proxy.ts` (Next.js 16's renamed `middleware` convention) is used only
+  for early navigation redirects and cache headers, never authorization.
+- `AUTH_SECRET` is resolved lazily so `next build` never requires runtime
+  secrets; it is used to HMAC-sign CSRF tokens at request time.
 
 ## 2. PostgreSQL + Prisma
 

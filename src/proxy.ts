@@ -2,18 +2,18 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Middleware provides early navigation checks only.
+ * Proxy (formerly Middleware in Next.js < 16) provides early navigation checks only.
  *
  * - Session validation (expiration/revocation) requires the database and is
  *   performed at the server boundary in Route Handlers / Server Components.
- * - Middleware only redirects clearly unauthenticated requests (no session
- *   cookie) away from private app routes, and sets cache headers so private,
+ * - Proxy only redirects clearly unauthenticated requests (no session cookie)
+ *   away from private app routes, and sets cache headers so private,
  *   user-specific data is never cached by browsers/CDNs.
  */
 const PUBLIC_PREFIXES = ["/login", "/api/v1/auth", "/_next", "/favicon.ico"];
 const PRIVATE_PREFIXES = ["/dashboard", "/work-items", "/teams", "/approvals", "/activity", "/my-work", "/settings"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
