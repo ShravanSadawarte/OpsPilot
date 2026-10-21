@@ -10,28 +10,22 @@ import {
   validateQuery,
   PaginationSchema,
   CreateWorkItemSchema,
+  WorkItemFiltersSchema,
 } from "@/lib/validation";
-import { WorkItemStatus, Priority, WorkItemType } from "@prisma/client";
 
 export const GET = withAuth(async (user, req: NextRequest) => {
   const pagination = validateQuery(PaginationSchema, req.nextUrl.searchParams);
-  const filters = {
+  const filters = WorkItemFiltersSchema.parse({
     teamId: req.nextUrl.searchParams.get("teamId") || undefined,
-    status: (req.nextUrl.searchParams.get("status") || undefined) as
-      | WorkItemStatus
-      | undefined,
-    priority: (req.nextUrl.searchParams.get("priority") || undefined) as
-      | Priority
-      | undefined,
-    type: (req.nextUrl.searchParams.get("type") || undefined) as
-      | WorkItemType
-      | undefined,
+    status: req.nextUrl.searchParams.get("status") || undefined,
+    priority: req.nextUrl.searchParams.get("priority") || undefined,
+    type: req.nextUrl.searchParams.get("type") || undefined,
     assigneeId: req.nextUrl.searchParams.get("assigneeId") || undefined,
     reporterId: req.nextUrl.searchParams.get("reporterId") || undefined,
     search: req.nextUrl.searchParams.get("search") || undefined,
     dueDate: req.nextUrl.searchParams.get("dueDate") || undefined,
-    overdue: (req.nextUrl.searchParams.get("overdue") as "true" | "false" | undefined),
-  };
+    overdue: req.nextUrl.searchParams.get("overdue") || undefined,
+  });
   const result = await listWorkItems({
     user,
     filters,
