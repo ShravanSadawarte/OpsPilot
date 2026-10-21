@@ -1,32 +1,18 @@
 import { db } from "@/lib/db";
-import {
-  ErrorCode,
-  AppError,
-  ok,
-  err,
-} from "@/lib/http";
-import {
-  validateInput,
-  CreateWorkItemSchema,
-  UpdateWorkItemSchema,
-  TransitionWorkItemSchema,
-  type CreateWorkItemInput,
-  type UpdateWorkItemInput,
-  type TransitionWorkItemInput,
+import { ErrorCode, AppError, ok } from "@/lib/http";
+import type {
+  CreateWorkItemInput,
+  UpdateWorkItemInput,
+  TransitionWorkItemInput,
 } from "@/lib/validation";
-import {
-  requireUser,
-  getCsrfTokenFromCookie,
-} from "@/lib/auth";
 import {
   canCreateWorkItem,
   canEditWorkItem,
   canViewWorkItem,
   canAssignWorkItem,
   canTransitionWorkItem,
-  canRequestApproval,
-  getUserTeamIds,
-  isTeamMember,
+  getVisibleTeamIds,
+  isActiveTeamMember,
   type AuthedUser,
 } from "@/lib/permissions";
 import { isValidTransition } from "@/lib/workflow";
@@ -46,41 +32,6 @@ function isUniqueConstraintError(e: unknown): boolean {
     "code" in e &&
     (e as { code?: unknown }).code === "P2002"
   );
-}
-
-/** Build the human-readable description for an activity event. */
-function activityDescription(
-  type: string,
-  meta?: Record<string, unknown>,
-): string {
-  switch (type) {
-    case "CREATED":
-      return "Work item created";
-    case "UPDATED":
-      return `Work item updated${meta?.fields ? ` (${String(meta.fields)})` : ""}`;
-    case "STATUS_CHANGED":
-      return `Status changed to ${meta?.nextStatus ?? "?"}${
-        meta?.previousStatus ? ` from ${meta.previousStatus}` : ""
-      }`;
-    case "PRIORITY_CHANGED":
-      return `Priority changed to ${meta?.nextPriority ?? "?"}${
-        meta?.previousPriority ? ` from ${meta.previousPriority}` : ""
-      }`;
-    case "ASSIGNED":
-      return `Assigned to ${meta?.assigneeName ?? "a user"}`;
-    case "UNASSIGNED":
-      return "Assignment removed";
-    case "COMMENT_ADDED":
-      return "Comment added";
-    case "APPROVAL_REQUESTED":
-      return "Approval requested";
-    case "APPROVED":
-      return "Approved";
-    case "REJECTED":
-      return `Rejected${meta?.reason ? `: ${meta.reason}` : ""}`;
-    default:
-      return type;
-  }
 }
 
 /* ======================================================================== */
@@ -108,7 +59,7 @@ export async function listWorkItems({
   filters: WorkItemFilters;
   pagination: { page: number; pageSize: number; sort?: string; order?: "asc" | "desc" };
 }) {
-  const teamIds = await getUserTeamIds(user.id);
+  const teamIds = await getVisibleTeamIds(user);
   if (teamIds.length === 0) {
     return ok({ items: [], meta: { page: pagination.page, pageSize: pagination.pageSize, total: 0, totalPages: 0 } });
   }
@@ -216,6 +167,17 @@ export async function createWorkItem(
   const team = await db.team.findUnique({ where: { id: input.teamId } });
   if (!team || !team.isActive) {
     throw new AppError(404, ErrorCode.NOT_FOUND, "Team not found.");
+  }
+
+  // An assignee must be an active member of this team. This prevents a creator
+  // from routing work to a user in another team or to a deactivated account.
+  if (input.assigneeId && !(await isActiveTeamMember(input.assigneeId, input.teamId))) {
+    throw new AppError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "The assignee must be an active member of the selected team.",
+      { assigneeId: ["Choose an active member of this team."] },
+    );
   }
 
   // Derived from the validated payload, never from a client-supplied header,
@@ -349,6 +311,46 @@ export async function updateWorkItem(
     throw new AppError(403, ErrorCode.FORBIDDEN, "Cannot edit this work item.");
   }
 
+  // Defense in depth: PATCH is a metadata update, never a workflow update.
+  // The route schema is strict and rejects this field, but the service also
+  // refuses it so a future caller cannot reintroduce the bypass.
+  if ("status" in input) {
+    throw new AppError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "Status changes must use the workflow transition endpoint.",
+      { status: ["Use POST /api/v1/work-items/:id to change status."] },
+    );
+  }
+
+  // Assignment is a separate permission from editing. A reporter or assignee
+  // may edit their item but cannot reassign it.
+  if (input.assigneeId !== undefined && input.assigneeId !== existing.assigneeId) {
+    // Check the role capability first. Only then validate the target, so a
+    // caller without assignment permission cannot use the response to probe
+    // whether a guessed user is a member of the team.
+    const canAssign = await canAssignWorkItem(user, { teamId: existing.teamId }, null);
+    if (!canAssign) {
+      throw new AppError(
+        403,
+        ErrorCode.FORBIDDEN,
+        "You cannot change the assignee of this work item.",
+      );
+    }
+
+    if (
+      input.assigneeId &&
+      !(await isActiveTeamMember(input.assigneeId, existing.teamId))
+    ) {
+      throw new AppError(
+        400,
+        ErrorCode.VALIDATION_ERROR,
+        "The assignee must be an active member of this team.",
+        { assigneeId: ["Choose an active member of this team."] },
+      );
+    }
+  }
+
   const expectedVersion = input.version;
   const data: Prisma.WorkItemUpdateInput = {};
   const changedFields: string[] = [];
@@ -368,10 +370,6 @@ export async function updateWorkItem(
   if (input.priority !== undefined && input.priority !== existing.priority) {
     data.priority = input.priority;
     changedFields.push("priority");
-  }
-  if (input.status !== undefined && input.status !== existing.status) {
-    data.status = input.status;
-    changedFields.push("status");
   }
   if (input.assigneeId !== undefined && input.assigneeId !== existing.assigneeId) {
     data.assignee = input.assigneeId
@@ -443,8 +441,9 @@ export async function transitionWorkItem(
 
   const canTrans = await canTransitionWorkItem(user, {
     teamId: existing.teamId,
-    status: existing.status,
-  }, input.status);
+    reporterId: existing.reporterId,
+    assigneeId: existing.assigneeId,
+  });
   if (!canTrans) {
     throw new AppError(403, ErrorCode.FORBIDDEN, "Cannot transition this work item.");
   }
@@ -532,16 +531,21 @@ export async function assignWorkItem(
     throw new AppError(404, ErrorCode.NOT_FOUND, "Work item not found.");
   }
 
-  // Validate target membership + active status
-  if (assigneeId) {
-    const canAssign = await canAssignWorkItem(user, { teamId: existing.teamId }, assigneeId);
-    if (!canAssign) {
-      throw new AppError(
-        403,
-        ErrorCode.FORBIDDEN,
-        "Target user is not an active member of this team or you cannot assign.",
-      );
-    }
+  // Assignment and unassignment are both privileged operations. Check the
+  // role capability before validating the target so an unauthorized caller
+  // cannot probe team membership through response status.
+  const canAssign = await canAssignWorkItem(user, { teamId: existing.teamId }, null);
+  if (!canAssign) {
+    throw new AppError(403, ErrorCode.FORBIDDEN, "Cannot assign this work item.");
+  }
+
+  if (assigneeId && !(await isActiveTeamMember(assigneeId, existing.teamId))) {
+    throw new AppError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "The assignee must be an active member of this team.",
+      { assigneeId: ["Choose an active member of this team."] },
+    );
   }
 
   try {
@@ -595,6 +599,13 @@ export async function claimWorkItem(
 
   if (existing.assigneeId) {
     throw new AppError(409, ErrorCode.CONFLICT, "Work item is already assigned.");
+  }
+
+  if (
+    existing.status === WorkItemStatus.RESOLVED ||
+    existing.status === WorkItemStatus.CLOSED
+  ) {
+    throw new AppError(409, ErrorCode.CONFLICT, "Resolved or closed work cannot be claimed.");
   }
 
   // Claim only if still unassigned (atomic conditional update on assigneeId null + version)
