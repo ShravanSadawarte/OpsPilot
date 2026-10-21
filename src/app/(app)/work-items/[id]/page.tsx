@@ -5,8 +5,8 @@ import { ClipboardCheck, Clock3, FileText } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { AppError } from "@/lib/http";
 import {
+  canAssignWorkItem,
   canEditWorkItem,
-  canManageTeam,
   canRequestApproval,
   canTransitionWorkItem,
 } from "@/lib/permissions";
@@ -14,8 +14,6 @@ import { getWorkItem, listActivity, listComments } from "@/server/services/workI
 import { listPendingApprovals } from "@/server/services/approval.service";
 import { getTeam } from "@/server/services/team.service";
 import type { ActivityEvent, Approval, Comment, WorkItem } from "@/types/api";
-import type { WorkItemStatus } from "@/lib/status";
-import { isKnownStatus } from "@/lib/status";
 import { formatDate, formatDateTime, formatDueDate, formatRelativeTime, isOverdueStatus, pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -88,17 +86,15 @@ export default async function WorkItemDetailPage({
   };
   const members = teamBody.data?.team?.memberships ?? [];
 
-  const [canEdit, canTransition, canRequest, canManage] = await Promise.all([
+  const [canEdit, canTransition, canRequest, canAssign] = await Promise.all([
     canEditWorkItem(user, item),
-    isKnownStatus(item.status)
-      ? canTransitionWorkItem(
-          user,
-          { teamId: item.teamId, status: item.status as WorkItemStatus },
-          item.status as WorkItemStatus,
-        )
-      : Promise.resolve(false),
+    canTransitionWorkItem(user, {
+      teamId: item.teamId,
+      reporterId: item.reporterId,
+      assigneeId: item.assigneeId,
+    }),
     canRequestApproval(user, { teamId: item.teamId, reporterId: item.reporterId }),
-    canManageTeam(user, item.teamId),
+    canAssignWorkItem(user, { teamId: item.teamId }, null),
   ]);
 
   const canClaim =
@@ -138,7 +134,7 @@ export default async function WorkItemDetailPage({
             permissions={{
               canEdit,
               canTransition,
-              canAssign: canManage && members.length > 0,
+              canAssign: canAssign && members.length > 0,
               canRequestApproval: canRequest && !pendingApproval,
               canClaim,
             }}
