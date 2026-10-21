@@ -4,7 +4,7 @@ import {
   canRequestApproval,
   canDecideApproval,
   canViewWorkItem,
-  getUserTeamIds,
+  getVisibleTeamIds,
   type AuthedUser,
 } from "@/lib/permissions";
 import { ApprovalStatus } from "@prisma/client";
@@ -34,15 +34,23 @@ export async function requestApproval(
     throw new AppError(403, ErrorCode.FORBIDDEN, "Cannot request approval for this item.");
   }
 
-  // Only one pending approval per work item.
-  const existing = await db.approval.findFirst({
-    where: { workItemId, status: ApprovalStatus.PENDING },
-  });
-  if (existing) {
-    throw new AppError(409, ErrorCode.CONFLICT, "A pending approval already exists for this work item.");
-  }
-
   const approval = await db.$transaction(async (tx) => {
+    // Serialize approval requests for this work item. The row lock plus the
+    // pending check prevents two concurrent requests from creating two
+    // pending approvals when there is no partial unique index in PostgreSQL.
+    await tx.$queryRaw`SELECT id FROM "WorkItem" WHERE id = ${workItemId} FOR UPDATE`;
+
+    const existing = await tx.approval.findFirst({
+      where: { workItemId, status: ApprovalStatus.PENDING },
+    });
+    if (existing) {
+      throw new AppError(
+        409,
+        ErrorCode.CONFLICT,
+        "A pending approval already exists for this work item.",
+      );
+    }
+
     const a = await tx.approval.create({
       data: { workItemId, requestedById: user.id, status: ApprovalStatus.PENDING },
       include: { requestedBy: { select: { id: true, name: true, email: true } } },
@@ -62,7 +70,7 @@ export async function requestApproval(
 }
 
 export async function listPendingApprovals(user: AuthedUser) {
-  const ids = await getUserTeamIds(user.id);
+  const ids = await getVisibleTeamIds(user);
 
   const approvals = await db.approval.findMany({
     where: {
@@ -107,6 +115,13 @@ export async function decideApproval(
     throw new AppError(404, ErrorCode.NOT_FOUND, "Approval not found.");
   }
 
+  // Cross-team callers must not learn whether a guessed approval id exists or
+  // whether it is still pending. Visibility is checked before state.
+  const canSee = await canViewWorkItem(user, { teamId: approval.workItem.teamId });
+  if (!canSee) {
+    throw new AppError(404, ErrorCode.NOT_FOUND, "Approval not found.");
+  }
+
   if (approval.status !== ApprovalStatus.PENDING) {
     throw new AppError(409, ErrorCode.CONFLICT, "This approval has already been decided.");
   }
@@ -119,30 +134,54 @@ export async function decideApproval(
     throw new AppError(403, ErrorCode.FORBIDDEN, "Cannot decide this approval.");
   }
 
-  // Atomic conditional decision: only one concurrent decision succeeds.
-  const decided = await db.approval.update({
-    where: { id: approvalId, status: ApprovalStatus.PENDING },
-    data: {
-      status: status === "APPROVED" ? ApprovalStatus.APPROVED : ApprovalStatus.REJECTED,
-      decidedById: user.id,
-      decidedAt: new Date(),
-      reason: status === "REJECTED" ? reason : null,
-    },
+  // Atomic conditional decision + audit event. Only one concurrent decision
+  // can flip a PENDING row; the loser sees count === 0 and gets a 409.
+  const result = await db.$transaction(async (tx) => {
+    const changed = await tx.approval.updateMany({
+      where: { id: approvalId, status: ApprovalStatus.PENDING },
+      data: {
+        status: status === "APPROVED" ? ApprovalStatus.APPROVED : ApprovalStatus.REJECTED,
+        decidedById: user.id,
+        decidedAt: new Date(),
+        reason: status === "REJECTED" ? reason?.trim() : null,
+      },
+    });
+
+    if (changed.count === 0) {
+      throw new AppError(
+        409,
+        ErrorCode.CONFLICT,
+        "This approval was already decided by another user.",
+      );
+    }
+
+    const decided = await tx.approval.findUnique({ where: { id: approvalId } });
+    if (!decided) {
+      throw new AppError(404, ErrorCode.NOT_FOUND, "Approval not found.");
+    }
+
+    await tx.activityEvent.create({
+      data: {
+        workItemId: approval.workItemId,
+        actorId: user.id,
+        type: status === "APPROVED" ? "APPROVED" : "REJECTED",
+        metadata: {
+          approvalId,
+          ...(status === "REJECTED" && reason?.trim()
+            ? { reason: reason.trim() }
+            : {}),
+        },
+      },
+    });
+
+    const workItem = await tx.workItem.findUnique({
+      where: { id: approval.workItemId },
+    });
+
+    return { approval: decided, workItem };
   });
 
-  if (!decided) {
-    // Another request beat us to it.
-    throw new AppError(409, ErrorCode.CONFLICT, "This approval was already decided by another user.");
-  }
-
-  // Optionally transition work item status on approval/reject within same tx.
-  // We do it after the conditional update commits by re-checking state.
-  const workItem = await db.workItem.findUnique({ where: { id: approval.workItemId } });
-
-  return ok({
-    approval: decided,
-    workItem,
-  });
+  return ok(result);
 }
 
 export async function getApproval(user: AuthedUser, approvalId: string) {
