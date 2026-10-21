@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserRole } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import argon2 from "argon2";
 
@@ -110,25 +110,25 @@ async function main() {
   });
 
   // --- Memberships (repeatable via upsert on unique teamId/userId) ---
-  const upsertMembership = (teamId: string, userId: string, role: string) =>
+  const upsertMembership = (teamId: string, userId: string, role: UserRole) =>
     db.teamMembership.upsert({
       where: { teamId_userId: { teamId, userId } },
-      update: { role: role as any, isActive: true },
-      create: { teamId, userId, role: role as any },
+      update: { role, isActive: true },
+      create: { teamId, userId, role },
     });
 
-  await upsertMembership(teamAlpha.id, admin.id, "ADMIN");
+  // ADMIN/MANAGER are global roles; team memberships only carry team roles.
+  await upsertMembership(teamAlpha.id, admin.id, "TEAM_LEAD");
   await upsertMembership(teamAlpha.id, teamLeadA.id, "TEAM_LEAD");
   await upsertMembership(teamAlpha.id, member1.id, "TEAM_MEMBER");
   await upsertMembership(teamAlpha.id, member2.id, "TEAM_MEMBER");
   await upsertMembership(teamAlpha.id, inactive.id, "TEAM_MEMBER");
 
-  await upsertMembership(teamBeta.id, manager.id, "MANAGER");
+  await upsertMembership(teamBeta.id, manager.id, "TEAM_LEAD");
   await upsertMembership(teamBeta.id, teamLeadB.id, "TEAM_LEAD");
   await upsertMembership(teamBeta.id, member3.id, "TEAM_MEMBER");
 
   // --- Work items (20+) with varied states/priorities, assigned + unassigned, overdue + upcoming ---
-  const now = new Date();
   const overdue = new Date(Date.now() - 10 * 86400000); // 10 days ago
   const upcoming = new Date(Date.now() + 10 * 86400000); // 10 days from now
 
