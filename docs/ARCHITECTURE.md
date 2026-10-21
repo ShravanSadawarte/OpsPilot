@@ -113,11 +113,14 @@ double-submit protection, and login rate limiting. This avoids the complexity
 and version-compatibility risk of integrating Auth.js with Next.js 16/React 19.
 
 ### Authorization
-Global roles (ADMIN, MANAGER, MEMBER, TEAM_LEAD, TEAM_MEMBER) combine with
-team-specific membership roles. Centralized `can*` functions are invoked by the
-domain service layer at the server boundary — not only in the proxy or UI.
-The proxy (`src/proxy.ts`, formerly `middleware.ts`) performs early navigation
-redirects only.
+The team is the resource boundary because the schema has no organization
+tenant. ADMIN is the only global role; MANAGER/TEAM_LEAD/MEMBER/TEAM_MEMBER
+require an active team membership. Team memberships may only carry team-scoped
+roles. Centralized `can*` functions and the `TEAM_ROLE_CAPABILITIES` map are
+invoked by the domain service layer at the server boundary — not only in the
+proxy or UI. Work-item status is changed only through the transition operation,
+and self-approval is denied for every role. The proxy (`src/proxy.ts`, formerly
+`middleware.ts`) performs early navigation redirects only.
 
 ### Data model
 Users, Sessions, Teams, TeamMemberships (unique per team/user), WorkItems

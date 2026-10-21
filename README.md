@@ -11,9 +11,10 @@ automated tests, and complete documentation.
 - **Authentication**: session-based auth with Argon2id password hashing,
   HttpOnly cookies, session expiration/revocation, CSRF double-submit
   protection, and login rate limiting.
-- **Authorization**: global roles (ADMIN, MANAGER, MEMBER, TEAM_LEAD,
-  TEAM_MEMBER) combined with team-specific membership roles, enforced at the
-  server boundary on every protected endpoint.
+- **Authorization**: team-scoped roles with one explicit global ADMIN override,
+  enforced at the server boundary on every protected endpoint. Managers and
+  team leads only have authority in teams they belong to; team memberships
+  cannot grant global ADMIN/MANAGER identities.
 - **Work items**: create, view, edit, transition status, assign/claim, add
   comments, set due dates and labels, search/filter/sort/paginate server-side,
   direct links to items.
@@ -27,8 +28,9 @@ automated tests, and complete documentation.
 - **Collaboration**: persisted comments, activity timeline with actor and
   timestamp.
 - **Approvals**: request, view pending, approve/reject (reason required for
-  rejection), actor and decision timestamp recorded, duplicate/conflicting
-  decisions prevented via atomic conditional update.
+  rejection), actor and decision timestamp recorded, self-approval denied for
+  every role, cross-team decisions denied, duplicate/conflicting decisions
+  prevented via atomic conditional update and an audit activity event.
 - **Concurrency**: optimistic locking via `version` field with atomic
   conditional updates; stale updates return HTTP 409 `VERSION_CONFLICT`.
 - **Idempotency**: `Idempotency-Key` header support for work-item creation,
@@ -196,9 +198,11 @@ npm run test:unit     # unit tests (workflow, permissions)
 npm run test:integration  # integration tests (requires DATABASE_URL_TEST)
 ```
 
-Unit tests cover the workflow transition map and role-weight authorization.
-Integration tests cover the critical correctness behaviors and require a live
-test PostgreSQL database (`DATABASE_URL_TEST`).
+Unit tests cover the workflow transition map, the role/capability matrix,
+team-scoped access, self-approval denial, assignment restrictions, team-role
+escalation payloads, and strict request validation. Integration tests cover
+the critical correctness behaviors and require a live test PostgreSQL database
+(`DATABASE_URL_TEST`).
 
 ## Production build command
 
