@@ -30,7 +30,8 @@ export default async function TeamsPage() {
       description: team.description,
       memberCount: team.memberCount,
       workItemCount: team.workItemCount,
-      userRole: team.userRole,
+      userRole:
+        team.userRole ?? (user.role === UserRole.ADMIN ? "ADMIN" : null),
       canManage: await canManageTeam(user, team.id),
       isMember: Boolean(team.userRole) || user.role === UserRole.ADMIN,
     })),

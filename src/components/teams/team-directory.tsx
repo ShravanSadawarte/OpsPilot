@@ -54,6 +54,7 @@ type TeamMember = {
   id: string;
   user: { id: string; name: string | null; email: string; role: string; isActive: boolean };
   role: string;
+  canRemove: boolean;
 };
 
 type TeamDetail = {
@@ -70,7 +71,7 @@ type DirectoryUser = {
   role: string;
 };
 
-const MEMBER_ROLES = ["TEAM_LEAD", "TEAM_MEMBER", "MANAGER", "MEMBER"] as const;
+const MEMBER_ROLES = ["TEAM_LEAD", "TEAM_MEMBER", "MEMBER"] as const;
 
 export function TeamDirectory({
   teams,
@@ -552,7 +553,7 @@ export function TeamDirectory({
                             Inactive
                           </Badge>
                         ) : null}
-                        {activeTeam.canManage && member.user.id !== currentUserId ? (
+                        {member.canRemove && member.user.id !== currentUserId ? (
                           removing === member.user.id ? (
                             <span className="flex shrink-0 items-center gap-1.5">
                               <span className="text-[11px] text-muted-foreground">Remove?</span>
