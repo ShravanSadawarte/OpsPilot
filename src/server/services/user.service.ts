@@ -6,9 +6,10 @@ import { UserRole } from "@prisma/client";
 /**
  * Directory of active users, used to staff teams.
  *
- * Enumerating the user directory is restricted to global administrators and
- * managers; team leads can manage the members they already see through the
- * team detail endpoint, but cannot browse the whole directory.
+ * Enumerating the user directory is restricted to ADMIN and MANAGER. Managers
+ * are team-scoped for work/approval authority but may browse this directory to
+ * staff the teams they manage. Team leads can manage members they already see
+ * through the team detail endpoint, but cannot browse the whole directory.
  */
 export async function listUsers(user: AuthedUser) {
   if (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER) {
