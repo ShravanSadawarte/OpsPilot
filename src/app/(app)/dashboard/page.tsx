@@ -125,7 +125,11 @@ export default async function DashboardPage() {
           </>
         }
         title={`Welcome back, ${firstName(user.name, user.email)}`}
-        description="Your operational picture across the teams you belong to — the work in flight, what needs a decision, and where to go next."
+        description={
+          user.role === "ADMIN"
+            ? "Your platform-wide operational picture — work in flight across every active team, what needs a decision, and where to go next."
+            : "Your operational picture across the teams you belong to — the work in flight, what needs a decision, and where to go next."
+        }
         actions={
           <>
             <Button asChild variant="outline">
@@ -175,7 +179,7 @@ export default async function DashboardPage() {
         <MetricCard
           label="Open work"
           value={data.openWork}
-          detail={`${formatNumber(data.unassignedWork)} unassigned in your teams`}
+          detail={`${formatNumber(data.unassignedWork)} unassigned in scope`}
           href="/work-items"
           icon={ListChecks}
           accent="blue"
@@ -284,7 +288,7 @@ export default async function DashboardPage() {
               <EmptyState
                 icon={CheckCircle2}
                 title="The attention queue is clear"
-                description="No open work in your teams is unassigned, overdue, or critical."
+                description="No open work in scope is unassigned, overdue, or critical."
                 compact
               />
             )}
@@ -294,7 +298,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Work distribution</CardTitle>
-            <CardDescription>All work items across your teams, by status.</CardDescription>
+            <CardDescription>All work items in scope, by status.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {totalWork > 0 ? (
