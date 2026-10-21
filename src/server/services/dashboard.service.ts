@@ -1,14 +1,10 @@
 import { db } from "@/lib/db";
-import { AppError, ErrorCode, ok } from "@/lib/http";
-import {
-  canViewWorkItem,
-  getUserTeamIds,
-  type AuthedUser,
-} from "@/lib/permissions";
+import { ok } from "@/lib/http";
+import { getVisibleTeamIds, type AuthedUser } from "@/lib/permissions";
 import { WorkItemStatus, Priority } from "@prisma/client";
 
 export async function dashboardMetrics(user: AuthedUser) {
-  const teamIds = await getUserTeamIds(user.id);
+  const teamIds = await getVisibleTeamIds(user);
 
   if (teamIds.length === 0) {
     return ok({
@@ -28,12 +24,8 @@ export async function dashboardMetrics(user: AuthedUser) {
 
   const now = new Date();
 
-  // Base scope: teams the user can see (global roles see everything via teamIds
-  // = all active teams for admin/manager? getUserTeamIds returns memberships,
-  // so admin without memberships sees none. That's a documented choice:
-  // dashboard is team-scoped by membership; admins see teams they're members of.
-  // To make admin see everything, we'd query all teams. We keep membership scope.)
-
+  // Admin sees every active team; every other role is scoped to active team
+  // memberships by getVisibleTeamIds.
   const baseWhere = { teamId: { in: teamIds } };
 
   const [
