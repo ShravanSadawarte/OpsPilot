@@ -28,31 +28,58 @@ export const PrioritySchema = z.nativeEnum(Priority);
 export const UserRoleSchema = z.nativeEnum(UserRole);
 
 /** Shared work-item creation schema. */
-export const CreateWorkItemSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().optional(),
-  type: WorkItemTypeSchema,
-  priority: PrioritySchema.default("MEDIUM"),
-  teamId: z.string().uuid(),
-  assigneeId: z.string().uuid().optional().nullable(),
-  dueDate: z.string().datetime().optional().nullable(),
-});
+export const CreateWorkItemSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().optional(),
+    type: WorkItemTypeSchema,
+    priority: PrioritySchema.default("MEDIUM"),
+    teamId: z.string().uuid(),
+    assigneeId: z.string().uuid().optional().nullable(),
+    dueDate: z.string().datetime().optional().nullable(),
+  })
+  .strict();
 
 export type CreateWorkItemInput = z.infer<typeof CreateWorkItemSchema>;
 
-/** Shared work-item update schema (partial, optimistic-concurrency aware). */
-export const UpdateWorkItemSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().optional(),
-  type: WorkItemTypeSchema.optional(),
-  priority: PrioritySchema.optional(),
-  status: WorkItemStatusSchema.optional(),
-  assigneeId: z.string().uuid().optional().nullable(),
-  dueDate: z.string().datetime().optional().nullable(),
-  version: z.number().int().nonnegative(),
-});
+/**
+ * Shared work-item update schema (partial, optimistic-concurrency aware).
+ *
+ * Status is deliberately absent. Status changes must go through the workflow
+ * transition endpoint so the transition graph and transition permission are
+ * checked together. `.strict()` rejects a status field instead of silently
+ * ignoring it, which makes an attempted bypass an explicit 400.
+ */
+export const UpdateWorkItemSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().optional(),
+    type: WorkItemTypeSchema.optional(),
+    priority: PrioritySchema.optional(),
+    assigneeId: z.string().uuid().optional().nullable(),
+    dueDate: z.string().datetime().optional().nullable(),
+    version: z.number().int().nonnegative(),
+  })
+  .strict();
 
 export type UpdateWorkItemInput = z.infer<typeof UpdateWorkItemSchema>;
+
+/** Validated work-item list filters. */
+export const WorkItemFiltersSchema = z
+  .object({
+    teamId: z.string().uuid().optional(),
+    status: WorkItemStatusSchema.optional(),
+    priority: PrioritySchema.optional(),
+    type: WorkItemTypeSchema.optional(),
+    assigneeId: z.string().uuid().optional(),
+    reporterId: z.string().uuid().optional(),
+    search: z.string().max(200).optional(),
+    dueDate: z.string().datetime().optional(),
+    overdue: z.enum(["true", "false"]).optional(),
+  })
+  .strict();
+
+export type WorkItemFiltersInput = z.infer<typeof WorkItemFiltersSchema>;
 
 /** Comment creation. */
 export const CreateCommentSchema = z.object({
@@ -84,13 +111,36 @@ export const DecideApprovalSchema = z.object({
 export type DecideApprovalInput = z.infer<typeof DecideApprovalSchema>;
 
 /** Team creation / update. */
-export const TeamSchema = z.object({
-  key: z.string().min(1).max(20).toUpperCase(),
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
-});
+export const TeamSchema = z
+  .object({
+    key: z.string().min(1).max(20).toUpperCase(),
+    name: z.string().min(1).max(100),
+    description: z.string().max(500).optional(),
+  })
+  .strict();
 
 export type TeamInput = z.infer<typeof TeamSchema>;
+
+/**
+ * A team membership can only carry a team-scoped role. ADMIN and MANAGER are
+ * global identities and are not assignable through the team API.
+ */
+export const TeamMembershipRoleSchema = z.enum([
+  "TEAM_LEAD",
+  "TEAM_MEMBER",
+  "MEMBER",
+]);
+
+export type TeamMembershipRoleInput = z.infer<typeof TeamMembershipRoleSchema>;
+
+export const AddTeamMemberSchema = z
+  .object({
+    userId: z.string().uuid(),
+    role: TeamMembershipRoleSchema,
+  })
+  .strict();
+
+export type AddTeamMemberInput = z.infer<typeof AddTeamMemberSchema>;
 
 /**
  * Validate an object against a Zod schema, returning a typed result or
