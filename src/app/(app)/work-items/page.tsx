@@ -16,9 +16,13 @@ export default async function WorkItemsPage() {
   const user = await requireUser();
   const result = await listTeams(user);
   const body = (await result.json()) as { data?: { items?: Team[] } };
-  const teams = (body.data?.items ?? [])
-    .filter((team) => Boolean(team.userRole))
-    .map((team) => ({ id: team.id, key: team.key, name: team.name }));
+  // listTeams is already scoped by the server. ADMIN receives every active
+  // team; everyone else receives only active memberships.
+  const teams = (body.data?.items ?? []).map((team) => ({
+    id: team.id,
+    key: team.key,
+    name: team.name,
+  }));
 
   return (
     <Suspense fallback={<WorkItemsSkeleton />}>

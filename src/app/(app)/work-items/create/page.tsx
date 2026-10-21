@@ -14,11 +14,9 @@ export default async function CreateWorkItemPage() {
   const user = await requireUser();
   const result = await listTeams(user);
   const body = (await result.json()) as { data?: { items?: Team[] } };
-  const allTeams = body.data?.items ?? [];
-  const teams =
-    user.role === "ADMIN" || user.role === "MANAGER"
-      ? allTeams
-      : allTeams.filter((team) => Boolean(team.userRole));
+  // listTeams applies the same team scope as createWorkItem: ADMIN receives
+  // every active team, everyone else receives only their active memberships.
+  const teams = body.data?.items ?? [];
 
   return (
     <CreateWorkItemForm
