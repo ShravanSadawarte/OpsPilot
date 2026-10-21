@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LockKeyhole } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { AppError } from "@/lib/http";
-import { canEditWorkItem } from "@/lib/permissions";
+import { canAssignWorkItem, canEditWorkItem } from "@/lib/permissions";
 import { getWorkItem } from "@/server/services/workItem.service";
 import { getTeam } from "@/server/services/team.service";
 import type { WorkItem } from "@/types/api";
@@ -72,6 +72,7 @@ export default async function EditWorkItemPage({
     data?: { team?: { memberships?: EditMember[] } };
   };
   const members = teamBody.data?.team?.memberships ?? [];
+  const canAssign = await canAssignWorkItem(user, { teamId: item.teamId }, null);
 
   return (
     <div className="space-y-6">
@@ -97,6 +98,7 @@ export default async function EditWorkItemPage({
           team: item.team,
         }}
         members={members}
+        canAssign={canAssign}
       />
     </div>
   );

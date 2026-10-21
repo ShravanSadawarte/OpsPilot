@@ -86,9 +86,11 @@ function toDateTimeLocal(value: string | null): string {
 export function EditWorkItemForm({
   item,
   members,
+  canAssign,
 }: {
   item: EditItem;
   members: EditMember[];
+  canAssign: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -157,7 +159,7 @@ export function EditWorkItemForm({
             description: values.description?.trim() ?? "",
             type: values.type,
             priority: values.priority,
-            assigneeId: values.assigneeId || null,
+            ...(canAssign ? { assigneeId: values.assigneeId || null } : {}),
             dueDate,
             version: item.version,
           }),
@@ -342,25 +344,40 @@ export function EditWorkItemForm({
                 id="assigneeId"
                 label="Assignee"
                 optional
-                description="Only active members of this team can be assigned."
+                description={
+                  canAssign
+                    ? "Only active members of this team can be assigned."
+                    : "Only team leads, managers, and administrators can change the assignee."
+                }
               >
-                <Select
-                  {...form.register("assigneeId")}
-                  id="assigneeId"
-                  disabled={submitting}
-                >
-                  <option value="">Unassigned — the team can claim it</option>
-                  {assigneeOptions.map((membership) => (
-                    <option key={membership.user.id} value={membership.user.id}>
-                      {membership.user.name ?? membership.user.email}
-                      {membership.role === "INACTIVE"
-                        ? " · inactive member"
-                        : membership.role
-                          ? ` · ${membership.role.replaceAll("_", " ").toLowerCase()}`
-                          : ""}
-                    </option>
-                  ))}
-                </Select>
+                {canAssign ? (
+                  <Select
+                    {...form.register("assigneeId")}
+                    id="assigneeId"
+                    disabled={submitting}
+                  >
+                    <option value="">Unassigned — the team can claim it</option>
+                    {assigneeOptions.map((membership) => (
+                      <option key={membership.user.id} value={membership.user.id}>
+                        {membership.user.name ?? membership.user.email}
+                        {membership.role === "INACTIVE"
+                          ? " · inactive member"
+                          : membership.role
+                            ? ` · ${membership.role.replaceAll("_", " ").toLowerCase()}`
+                            : ""}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <div
+                    id="assigneeId"
+                    className="flex min-h-9 items-center rounded-lg border border-border bg-muted/40 px-3 text-sm text-foreground"
+                  >
+                    {currentAssignee
+                      ? currentAssignee.name ?? currentAssignee.email
+                      : "Unassigned"}
+                  </div>
+                )}
               </Field>
 
               <Field
